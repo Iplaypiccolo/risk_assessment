@@ -12,13 +12,19 @@
   var nearCache = {};      // 구호기관 검색 결과 (업체 id별, 저장 안 함)
 
   var STEPS = [
-    { key: 'info', title: '기본 정보' },
-    { key: 'workers', title: '근로자' },
-    { key: 'survey', title: '질문에 답하기' },
-    { key: 'contacts', title: '비상연락처' },
-    { key: 'photos', title: '사진 넣기' },
-    { key: 'done', title: 'PDF 받기' }
+    { key: 'info', title: '기본 정보', short: '기본정보', icon: '<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.6-1.5 1.6-2 2.5-2s1.9.5 2.5 2M14 10h4M14 14h3"/>' },
+    { key: 'workers', title: '근로자', short: '근로자', icon: '<circle cx="9" cy="8" r="3"/><path d="M3.5 19c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5"/><circle cx="17" cy="9" r="2.3"/><path d="M16 14.6c2.2.1 3.9 1.5 4.5 4.4"/>' },
+    { key: 'survey', title: '질문에 답하기', short: '질문', icon: '<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 9l1.5 1.5L12 8M8 15l1.5 1.5L12 14M14.5 9.5H17M14.5 15.5H17"/>' },
+    { key: 'contacts', title: '비상연락처', short: '연락처', icon: '<path d="M5 4h3l2 5-2.5 1.5a11 11 0 005 5L14 13l5 2v3a2 2 0 01-2 2A15 15 0 013 6a2 2 0 012-2z"/>' },
+    { key: 'photos', title: '사진 넣기', short: '사진', icon: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>' },
+    { key: 'done', title: 'PDF 받기', short: 'PDF', icon: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M12 11v6M9.5 14.5L12 17l2.5-2.5"/>' }
   ];
+  function svg(paths) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>'; }
+  function stepStrip() {
+    return '<nav class="steps" aria-label="단계">' + STEPS.map(function (s, i) {
+      return '<button class="step' + (i === stepIdx ? ' on' : i < stepIdx ? ' done' : '') + '" data-act="goto" data-i="' + i + '"' + (i === stepIdx ? ' aria-current="step"' : '') + '><span class="dot">' + svg(s.icon) + '</span>' + s.short + '</button>';
+    }).join('') + '</nav>';
+  }
   var PHOTO_SLOTS = [
     { k: 'pre1', label: '사전 교육 사진 ①', aspect: 4 / 3 },
     { k: 'pre2', label: '사전 교육 사진 ②', aspect: 4 / 3 },
@@ -135,7 +141,7 @@
       case 'photos': html = viewPhotos(); break;
       case 'done': html = viewDone(); break;
     }
-    $app.innerHTML = '<div class="company-tag">' + esc(cur.info.company || '업체명 미입력') + '</div>' + html;
+    $app.innerHTML = stepStrip() + '<div class="company-tag">' + esc(cur.info.company || '업체명 미입력') + '</div>' + html;
   }
   function goStep(i, keepScroll) {
     stepIdx = Math.max(0, Math.min(STEPS.length - 1, i)); view = 'step';
@@ -146,7 +152,7 @@
   /* 처음 화면 */
   function renderHome() {
     Store.all().then(function (list) {
-      var h = '<section class="hero"><h1>위험성평가 결과보고서</h1><p>질문에 답하고 사진만 넣으면<br><b>PDF 보고서</b>가 완성됩니다.</p></section>';
+      var h = '<section class="hero"><span class="hero-go" aria-hidden="true">' + svg('<path d="M7 17L17 7M9 7h8v8"/>') + '</span><h1>위험성평가<br><span class="serif">결과보고서</span> 만들기</h1><p>질문에 답하고 사진만 넣으면<br>PDF 보고서가 완성됩니다.</p><span class="hero-tag">제설작업 · 약 15분</span></section>';
       h += '<label class="admin-toggle"><input type="checkbox" data-act="multi"' + (multi ? ' checked' : '') + '><span>여러 업체 작성하기</span></label>';
       if (!multi) {
         var last = list.filter(function (c) { return c.id === Settings.get('currentId'); })[0] || list[0];
@@ -575,7 +581,7 @@
   function stepMenu() {
     var m = document.getElementById('modal');
     m.innerHTML = '<div class="menu"><div class="addr-head"><b>단계 목록</b><button class="btn btn-sm btn-ghost" data-act="closeModal">닫기</button></div>' +
-      STEPS.map(function (s, i) { return '<button class="menu-item' + (i === stepIdx ? ' on' : '') + '" data-act="goto" data-i="' + i + '">' + (i + 1) + '. ' + s.title + '</button>'; }).join('') +
+      STEPS.map(function (s, i) { return '<button class="menu-item' + (i === stepIdx ? ' on' : '') + '" data-act="goto" data-i="' + i + '"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + s.icon + '</svg>' + (i + 1) + '. ' + s.title + '</button>'; }).join('') +
       '<button class="menu-item home" data-act="home">⌂ 처음 화면</button></div>';
     m.hidden = false; document.body.classList.add('noscroll');
   }

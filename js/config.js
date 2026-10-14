@@ -1,7 +1,8 @@
 /* 설정
- * kakaoJsKey : 카카오 개발자 사이트(developers.kakao.com)에서 받은 「JavaScript 키」.
- *   - 비워 두면 구호기관 자동 찾기 대신 「카카오맵에서 찾아보기」 버튼이 나옵니다.
- *   - JavaScript 키는 등록한 웹사이트 주소에서만 작동하므로 여기에 적어도 괜찮습니다.
+ * 카카오 JavaScript 키는 이 파일에 적지 않습니다.
+ * GitHub 저장소 Settings → Secrets and variables → Actions 에 「KAKAO_JS_KEY」로 넣어 두면
+ * 배포할 때 자동으로 채워집니다 (.github/workflows/deploy.yml).
+ * 키가 없으면 구호기관 자동 찾기 대신 「카카오맵에서 찾기」 버튼이 나옵니다.
  */
 window.APP_CONFIG = {
   kakaoJsKey: ''

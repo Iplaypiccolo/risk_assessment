@@ -23,7 +23,7 @@
     var defPlace = (info.branch ? String(info.branch).replace(/지사$/, '') + '지사 회의실, ' : '') + (info.company ? info.company + ' 사무실' : '');
     if (!sch.preEduPlace) sch.preEduPlace = defPlace;
     if (!sch.postEduPlace) sch.postEduPlace = defPlace;
-    var budgetRows = (c.budget && c.budget.length) ? c.budget : budgetRows;
+    var budgetRows = (c.budget && c.budget.length) ? c.budget : (E.budget || []);
     var photos = c.photos || {};
     var ceoTxt = ceo ? '사장 ' + ceo : '사장';
     var content = [];
@@ -455,7 +455,7 @@
     content.push({ text: '□ 개인보호구 지급계획서', fontSize: 10, bold: true, margin: [0, 0, 0, 8] });
     var ppe = E.ppe || { rows: [], mgmt: [] };
     var ppeRows = (ppe.rows || []);
-    var targetTxt = (wRoleNames.length ? wRoleNames.join('\n') : '운전원') + (ppe.team ? '\n\n' + cl(ppe.team) : '');
+    var targetTxt = (wRoleNames.length ? wRoleNames.join('\n') : '운전원') + (company ? '\n\n' + company : '');
     var ppeBody = [['대상자', '지급계획', '비고'].map(function (h) { return { text: h, alignment: 'center', bold: true, fontSize: 9, fillColor: LGRAY }; })];
     ppeRows.forEach(function (r, i) {
       ppeBody.push([i === 0 ? { text: targetTxt, rowSpan: Math.max(1, ppeRows.length), alignment: 'center', fontSize: 8.5, lineHeight: 1.3 } : {}, { text: cl(r.plan), fontSize: 8.5, lineHeight: 1.5 }, { text: cl(r.note), fontSize: 8, alignment: 'center' }]);

@@ -435,7 +435,7 @@
       return listEditor('edit.dangerWork', [{ k: 'work', l: '작업내용' }, { k: 'place', l: '위치' }, { k: 'detail', l: '세부 공종 예시', t: 'area' }, { k: 'yes', l: '해당 여부', bool: 1 }], { work: '', place: '', detail: '', yes: true }, '작업');
     } },
     { id: 'ppe', title: '개인보호구', paths: ['ppe'], render: function () {
-      return '<p class="hint">대상자 칸에는 근로자 명단이 자동으로 들어갑니다. 아래 소속/팀 이름이 그 밑에 붙습니다.</p>' + field('소속 / 팀 이름', 'edit.ppe.team') +
+      return '<p class="hint">대상자 칸에는 근로자 명단과 업체 이름이 자동으로 들어갑니다.</p>' +
         listEditor('edit.ppe.rows', [{ k: 'plan', l: '지급계획', t: 'area' }, { k: 'note', l: '비고' }], { plan: '', note: '' }, '지급계획') +
         '<h4>관리·운영방안</h4>' + strList('edit.ppe.mgmt', '방안');
     } },
@@ -590,21 +590,69 @@
   }
 
   /* ---------- 파일로 저장 / 불러오기 ---------- */
+  /* 백업 파일은 HTML: 휴대폰에서 열면 저장된 내용을 바로 볼 수 있고, 같은 파일로 「불러오기」도 됩니다.
+   * (실제 데이터는 파일 안의 <script type="application/json" id="ra-backup"> 에 들어 있음) */
+  function backupHtml(payload) {
+    var site = location.origin + location.pathname.replace(/[^/]*$/, '');
+    var json = JSON.stringify(payload).replace(/</g, '\\u003c');
+    var cards = payload.companies.map(function (c) {
+      var i = c.info || {}, ws = (c.workers || []).filter(function (w) { return w.name; });
+      var ev = L.evalSummary(c);
+      var ph = Object.keys(c.photos || {}).map(function (k) { return '<img src="' + c.photos[k] + '" alt="">'; }).join('');
+      return '<section class="c"><h2>' + esc(i.company || '업체명 미입력') + '</h2>' +
+        '<table>' +
+        '<tr><th>계약명</th><td>' + esc(i.contract || '') + '</td></tr>' +
+        '<tr><th>대표자</th><td>' + esc(i.ceo || '') + (i.ceoPhone ? ' (' + esc(i.ceoPhone) + ')' : '') + '</td></tr>' +
+        '<tr><th>계약기간</th><td>' + esc(D.dot(i.contractStart)) + ' ~ ' + esc(D.dot(i.contractEnd)) + '</td></tr>' +
+        '<tr><th>작성일</th><td>' + esc(D.dot(i.writeDate)) + '</td></tr>' +
+        '<tr><th>근로자</th><td>' + (ws.length ? ws.map(function (w) { return esc(w.name) + (w.phone ? ' ' + esc(w.phone) : ''); }).join('<br>') : '-') + '</td></tr>' +
+        '<tr><th>평가표</th><td>' + (ev.done ? ev.total + '점 · ' + esc(ev.grade) : '질문 답하는 중') + '</td></tr>' +
+        '</table>' + (ph ? '<div class="ph">' + ph + '</div>' : '') + '</section>';
+    }).join('');
+    return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<title>위험성평가 저장 파일 (' + esc(D.dot(D.today())) + ')</title><style>' +
+      'body{margin:0;background:#eef3f7;color:#10243a;font:18px/1.55 -apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;word-break:keep-all}' +
+      'main{max-width:720px;margin:0 auto;padding:16px}' +
+      '.head{background:#1f5f8f;color:#fff;border-radius:18px;padding:20px}.head h1{margin:0 0 6px;font-size:24px}.head p{margin:0;opacity:.92}' +
+      '.how{background:#fff4d6;color:#5c3d00;border-radius:14px;padding:14px 16px;margin:14px 0}' +
+      '.how a{display:block;margin-top:10px;background:#1f5f8f;color:#fff;text-align:center;text-decoration:none;font-weight:700;border-radius:14px;padding:14px}' +
+      '.c{background:#fff;border:1px solid #d6e1e9;border-radius:18px;padding:18px;margin:0 0 14px}.c h2{margin:0 0 10px;font-size:22px}' +
+      'table{width:100%;border-collapse:collapse}th{text-align:left;color:#4e6274;font-weight:600;width:90px;vertical-align:top;padding:6px 8px 6px 0}td{padding:6px 0;border-bottom:1px solid #eef3f7}' +
+      '.ph{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.ph img{width:100%;border-radius:10px;display:block}' +
+      '</style></head><body><main>' +
+      '<div class="head"><h1>위험성평가 저장 파일</h1><p>' + esc(D.dot(D.today())) + ' 저장 · 업체 ' + payload.companies.length + '곳</p></div>' +
+      '<div class="how"><b>이 파일로 이어서 작성하려면</b><br>아래 버튼으로 사이트를 연 뒤, 첫 화면 맨 아래 「파일로 저장 · 다른 기기로 옮기기」 → 「불러오기」를 누르고 이 파일을 고르세요.' +
+      '<a href="' + esc(site) + '">위험성평가 보고서 만들기 열기</a></div>' + cards +
+      '</main><script type="application/json" id="ra-backup">' + json + '<\/script></body></html>';
+  }
   function exportAll() {
     Store.all().then(function (list) {
       var data = multi ? list : list.filter(function (c) { return c.id === Settings.get('currentId'); });
       if (!data.length) data = list.slice(0, 1);
-      var blob = new Blob([JSON.stringify({ app: 'risk_assessment', v: 2, companies: data, settings: SET })], { type: 'application/json' });
-      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '위험성평가_백업_' + D.today().replace(/-/g, '') + '.json'; document.body.appendChild(a); a.click(); a.remove();
-      toast('파일로 저장했습니다.');
+      if (!data.length) { alert('저장할 내용이 아직 없습니다.'); return; }
+      var payload = { app: 'risk_assessment', v: 2, companies: data, settings: SET };
+      var blob = new Blob([backupHtml(payload)], { type: 'text/html' });
+      var who = data.length === 1 ? (data[0].info.company || '업체') : '업체' + data.length + '곳';
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = '위험성평가_저장_' + who.replace(/[\\/:*?"<>|\s]+/g, '_') + '_' + D.today().replace(/-/g, '') + '.html';
+      document.body.appendChild(a); a.click(); a.remove();
+      toast('파일로 저장했습니다. 휴대폰의 「다운로드」 폴더를 확인하세요.');
     });
   }
+  function readBackup(text) {
+    var t = String(text || '').trim();
+    if (t.charAt(0) === '{') return JSON.parse(t);
+    var doc = new DOMParser().parseFromString(t, 'text/html');
+    var el = doc.getElementById('ra-backup');
+    if (!el) throw new Error('형식 오류');
+    return JSON.parse(el.textContent);
+  }
   function importFile() {
-    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.html,.htm,.json,text/html,application/json';
     inp.onchange = function () {
       var f = inp.files[0]; if (!f) return;
       f.text().then(function (t) {
-        var d = JSON.parse(t); if (!d || !d.companies) throw new Error('형식 오류');
+        var d = readBackup(t); if (!d || !d.companies) throw new Error('형식 오류');
         var jobs = d.companies.map(function (c) { return Store.put(migrate(c)); });
         if (d.settings && confirm('보고서 기본 내용 설정도 함께 불러올까요?')) { SET = migrateSet(d.settings); jobs.push(Store.put(SET)); }
         return Promise.all(jobs).then(function () { return d.companies.length; });

@@ -116,6 +116,8 @@
   /* ---------- 화면 그리기 ---------- */
   function render() {
     var nav = document.getElementById('bottomNav'), prog = document.getElementById('progress'), menu = document.getElementById('topMenu');
+    var sub = document.getElementById('topSub');
+    if (sub) sub.textContent = view === 'step' && cur ? (cur.info.company || '업체명 미입력') : view === 'settings' ? '모든 업체에 똑같이 적용' : '제설작업 위험성평가 결과보고서';
     if (view === 'home') {
       document.getElementById('topTitle').textContent = '위험성평가 보고서 만들기';
       nav.hidden = true; prog.hidden = true; menu.hidden = true;
@@ -152,8 +154,8 @@
   /* 처음 화면 */
   function renderHome() {
     Store.all().then(function (list) {
-      var h = '<section class="hero"><span class="hero-go" aria-hidden="true">' + svg('<path d="M7 17L17 7M9 7h8v8"/>') + '</span><h1>위험성평가<br><span class="serif">결과보고서</span> 만들기</h1><p>질문에 답하고 사진만 넣으면<br>PDF 보고서가 완성됩니다.</p><span class="hero-tag">제설작업 · 약 15분</span></section>';
-      h += '<label class="admin-toggle"><input type="checkbox" data-act="multi"' + (multi ? ' checked' : '') + '><span>여러 업체 작성하기</span></label>';
+      var h = '<section class="hero"><h1>위험성평가<br>결과보고서 만들기</h1><p>질문에 답하고 사진만 넣으면<br>PDF 보고서가 완성됩니다.</p><span class="hero-tag">제설작업 · 약 15분</span></section>';
+      h += '<div class="seg" role="group" aria-label="작성 방식"><button data-act="setMulti" data-v="0" aria-pressed="' + !multi + '">한 업체 작성</button><button data-act="setMulti" data-v="1" aria-pressed="' + multi + '">여러 업체 작성</button></div>';
       if (!multi) {
         var last = list.filter(function (c) { return c.id === Settings.get('currentId'); })[0] || list[0];
         if (last) {
@@ -254,8 +256,7 @@
       return h;
     }
     var ev = L.evalSummary(cur);
-    var h2 = '<div class="sv-done"><div class="sv-done-t">질문에 모두 답하셨습니다 👍</div>' +
-      '<div class="score"><b>' + (ev.total != null ? ev.total : '-') + '</b>점 <span class="grade">' + esc(ev.grade) + '</span></div>' +
+    var h2 = '<div class="sv-done"><div class="sv-done-t">질문에 모두 답하셨습니다 👍</div>' + statbar(ev) +
       (ev.note ? '<div class="hint">' + esc(ev.note) + '</div>' : '') +
       (ev.grade && 'CD'.indexOf(ev.grade[0]) >= 0 ? '<div class="warn">70점(B등급)보다 낮습니다. 부족한 부분을 보완한 뒤 다시 평가받아야 할 수 있습니다.</div>' : '') +
       '<div class="hint">「다음」을 누르세요.</div></div>';
@@ -267,6 +268,9 @@
       h2 += '<button class="ans-row" data-act="redo" data-item="' + it + '" data-root="' + r + '"><span class="ans-t">' + esc(Q[r].text.replace('{WD}', mdKor(cur.info.writeDate))) + '</span><span class="ans-a">' + txt + (typeof sc === 'number' ? ' <small>(' + sc + '점)</small>' : sc === 'exclude' ? ' <small>(제외)</small>' : '') + '</span></button>';
     });
     return h2 + '</div>';
+  }
+  function statbar(ev) {
+    return '<div class="statbar"><div class="stat"><div class="num">' + (ev.total != null ? ev.total : '-') + '</div><div class="lbl">점수</div></div><div class="stat"><div class="num txt">' + esc(ev.grade || '-') + '</div><div class="lbl">등급</div></div></div>';
   }
   function rootOf(id) {
     var it = L.Q[id].item;
@@ -371,8 +375,7 @@
       [!!i.contract, '계약명', 0], [!!i.company, '업체명', 0], [!!i.ceo, '대표자 성명', 0], [!!i.contractStart && !!i.contractEnd, '계약기간', 0],
       [nW > 0, '근로자 이름', 1], [!w.pending, '질문 답하기', 2], [nP === PHOTO_SLOTS.length, '사진 (' + nP + '/' + PHOTO_SLOTS.length + ')', 4]
     ];
-    var h = '<div class="sv-done"><div class="sv-done-t">보고서 준비 상태</div>';
-    if (ev.done) h += '<div class="score">평가표 <b>' + ev.total + '</b>점 <span class="grade">' + esc(ev.grade) + '</span></div>';
+    var h = '<div class="statbar"><div class="stat"><div class="num">' + (ev.done ? ev.total : '-') + '</div><div class="lbl">점수</div></div><div class="stat"><div class="num txt">' + (ev.done ? esc(ev.grade) : '-') + '</div><div class="lbl">등급</div></div><div class="stat"><div class="num">' + nW + '</div><div class="lbl">근로자</div></div><div class="stat"><div class="num">' + nP + '/' + PHOTO_SLOTS.length + '</div><div class="lbl">사진</div></div>';
     h += '</div><div class="checks">' + checks.map(function (c) {
       return '<div class="chk ' + (c[0] ? 'ok' : 'no') + '"><span>' + (c[0] ? '✔' : '!') + ' ' + c[1] + '</span>' + (c[0] ? '' : '<button class="btn btn-sm btn-ghost" data-act="goto" data-i="' + c[2] + '">채우러 가기</button>') + '</div>';
     }).join('') + '</div>';
@@ -622,8 +625,8 @@
   document.addEventListener('click', function (e) {
     var b = e.target.closest('[data-act]'); if (!b) return;
     var act = b.dataset.act;
-    if (act === 'multi') return; // change 이벤트에서 처리
     switch (act) {
+      case 'setMulti': multi = b.dataset.v === '1'; Settings.set('multi', multi); renderHome(); break;
       case 'home': goHome(); break;
       case 'menu': stepMenu(); break;
       case 'closeModal': closeModal(); break;
@@ -724,11 +727,10 @@
     }
     if (!t.dataset || !t.dataset.bind || !cur) return;
     setP(cur, t.dataset.bind, t.value); save();
-    if (t.dataset.bind === 'info.company') { var tag = document.querySelector('.company-tag'); if (tag) tag.textContent = t.value || '업체명 미입력'; }
+    if (t.dataset.bind === 'info.company') { var ts = document.getElementById('topSub'); if (ts) ts.textContent = t.value || '업체명 미입력'; }
   });
   document.addEventListener('change', function (e) {
     var t = e.target;
-    if (t.dataset && t.dataset.act === 'multi') { multi = t.checked; Settings.set('multi', multi); renderHome(); return; }
     if (t.dataset && t.dataset.kind === 'tel') { var f = fmtPhone(t.value); if (f !== t.value) { t.value = f; setP(cur, t.dataset.bind, f); save(); } }
     if (t.dataset && t.dataset.bind && t.type === 'date') { setP(cur, t.dataset.bind, t.value); save(); }
     if (t.dataset && t.dataset.photo) {

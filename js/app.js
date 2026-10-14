@@ -1,0 +1,676 @@
+/* 위험성평가 보고서 만들기 - 화면 */
+(function () {
+  'use strict';
+  var L = LOGIC, D = L.D, T = TPL;
+  var $app = document.getElementById('app');
+  var cur = null;          // 작성 중인 업체
+  var view = 'home';       // home | step
+  var stepIdx = 0;
+  var openSec = {};        // 펼쳐 둔 수정 항목
+  var admin = Settings.get('admin', false);
+
+  var STEPS = [
+    { key: 'info', title: '기본 정보' },
+    { key: 'workers', title: '근로자' },
+    { key: 'contacts', title: '비상연락처' },
+    { key: 'survey', title: '설문 (⭕/❌)' },
+    { key: 'schedule', title: '교육·점검 날짜' },
+    { key: 'photos', title: '사진 넣기' },
+    { key: 'edit', title: '내용 수정 (선택)' },
+    { key: 'done', title: '완성 · PDF 받기' }
+  ];
+  var PHOTO_SLOTS = [
+    { k: 'pre1', label: '사전 교육 사진 ①', aspect: 4 / 3 },
+    { k: 'pre2', label: '사전 교육 사진 ②', aspect: 4 / 3 },
+    { k: 'post1', label: '결과 교육 사진 ①', aspect: 4 / 3 },
+    { k: 'post2', label: '결과 교육 사진 ②', aspect: 4 / 3 },
+    { k: 'edu', label: '교육실적 사진 (근로계약서, 교육사진)', aspect: 1.6 }
+  ];
+  var RELS = [['母', '어머니'], ['父', '아버지'], ['妻', '아내'], ['夫', '남편'], ['子', '아들'], ['女', '딸'], ['兄', '형·오빠'], ['弟', '동생']];
+
+  /* ---------- 공통 도우미 ---------- */
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function getP(o, p) { return p.split('.').reduce(function (a, k) { return a == null ? undefined : a[k]; }, o); }
+  function setP(o, p, v) {
+    var ks = p.split('.'), last = ks.pop(), t = o;
+    ks.forEach(function (k, i) { if (t[k] == null) t[k] = /^\d+$/.test(ks[i + 1] || last) ? [] : {}; t = t[k]; });
+    t[last] = v;
+  }
+  function uid() { return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function toast(msg) { var t = document.getElementById('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(function () { t.hidden = true; }, 2200); }
+  function fmtPhone(v) {
+    var n = String(v || '').replace(/\D/g, '');
+    if (/^02/.test(n)) { if (n.length === 9) return n.replace(/(\d{2})(\d{3})(\d{4})/, '$1-$2-$3'); if (n.length === 10) return n.replace(/(\d{2})(\d{4})(\d{4})/, '$1-$2-$3'); }
+    if (n.length === 11) return n.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+    if (n.length === 10) return n.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    if (n.length === 8) return n.replace(/(\d{4})(\d{4})/, '$1-$2');
+    return v;
+  }
+
+  function newCompany() {
+    return migrate({
+      id: uid(), createdAt: Date.now(),
+      info: { writeDate: D.today() },
+      workers: [{ name: '', phone: '', role: '운전원' }],
+      emergency: [{ name: '', phone: '', rel: '母' }, { name: '', phone: '', rel: '妻' }, { name: '', phone: '', rel: '子' }],
+      agencies: { fire: {}, hospital: {}, police: {}, patrol: {} },
+      schedule: {}, answers: {}, traits: { senior: true }, accident: { cases: 1, injured: 1, dead: 0 },
+      photos: {}, photosOrig: {}, edit: clone(T.DEFAULT_EDIT)
+    });
+  }
+  function migrate(c) {
+    c.info = c.info || {}; c.workers = c.workers || []; c.emergency = c.emergency || [];
+    c.agencies = c.agencies || {}; ['fire', 'hospital', 'police', 'patrol'].forEach(function (k) { c.agencies[k] = c.agencies[k] || {}; });
+    c.schedule = c.schedule || {}; c.answers = c.answers || {}; c.traits = c.traits || {}; c.accident = c.accident || { cases: 1, injured: 1, dead: 0 };
+    c.photos = c.photos || {}; c.photosOrig = c.photosOrig || {}; c.edit = c.edit || {};
+    Object.keys(T.DEFAULT_EDIT).forEach(function (k) { if (c.edit[k] === undefined) c.edit[k] = clone(T.DEFAULT_EDIT[k]); });
+    return c;
+  }
+  var saveT = null;
+  function save(now) {
+    if (!cur) return;
+    clearTimeout(saveT);
+    var doIt = function () { Store.put(cur).catch(function () { toast('저장 공간이 부족해요. 사진을 줄여 주세요.'); }); };
+    if (now) doIt(); else saveT = setTimeout(doIt, 400);
+  }
+
+  /* ---------- 입력칸 만들기 ---------- */
+  function field(label, path, o) {
+    o = o || {};
+    var v = getP(cur, path); if (v == null) v = '';
+    var attrs = ' data-bind="' + path + '"' + (o.kind ? ' data-kind="' + o.kind + '"' : '');
+    var ph = o.ph ? ' placeholder="' + esc(o.ph) + '"' : '';
+    var input;
+    if (o.type === 'area') input = '<textarea rows="' + (o.rows || 3) + '"' + attrs + ph + '>' + esc(v) + '</textarea>';
+    else if (o.type === 'date') input = '<input type="date"' + attrs + ' value="' + esc(v) + '">';
+    else if (o.type === 'tel') input = '<input type="tel" inputmode="tel" autocomplete="off"' + attrs + ph + ' value="' + esc(v) + '" data-kind="tel">';
+    else if (o.type === 'num') input = '<input type="text" inputmode="numeric" autocomplete="off"' + attrs + ph + ' value="' + esc(v) + '">';
+    else input = '<input type="text" autocomplete="off"' + attrs + ph + ' value="' + esc(v) + '">';
+    var chips = '';
+    if (o.chips) chips = '<div class="chips">' + o.chips.map(function (c) {
+      var val = Array.isArray(c) ? c[0] : c, lab = Array.isArray(c) ? c[1] : c;
+      return '<button type="button" class="chip' + (v === val ? ' on' : '') + '" data-act="chip" data-path="' + path + '" data-val="' + esc(val) + '">' + esc(lab) + '</button>';
+    }).join('') + '</div>';
+    return '<label class="field' + (o.cls ? ' ' + o.cls : '') + '"><span class="lab">' + label + (o.req ? ' <em class="req">필수</em>' : '') + '</span>' +
+      (o.hint ? '<span class="hint">' + o.hint + '</span>' : '') + chips + (o.noInput ? '' : input) + (o.after || '') + '</label>';
+  }
+
+  /* ---------- 화면 그리기 ---------- */
+  function render() {
+    var nav = document.getElementById('bottomNav'), prog = document.getElementById('progress'), menu = document.getElementById('topMenu');
+    if (view === 'home') {
+      document.getElementById('topTitle').textContent = '위험성평가 보고서 만들기';
+      nav.hidden = true; prog.hidden = true; menu.hidden = true;
+      renderHome(); return;
+    }
+    var st = STEPS[stepIdx];
+    document.getElementById('topTitle').textContent = (stepIdx + 1) + '. ' + st.title;
+    menu.hidden = false; prog.hidden = false; nav.hidden = false;
+    document.getElementById('progressBar').style.width = ((stepIdx + 1) / STEPS.length * 100) + '%';
+    document.getElementById('btnPrev').textContent = stepIdx === 0 ? '◀ 처음으로' : '◀ 이전';
+    document.getElementById('btnNext').hidden = stepIdx === STEPS.length - 1;
+    var html = '';
+    switch (st.key) {
+      case 'info': html = viewInfo(); break;
+      case 'workers': html = viewWorkers(); break;
+      case 'contacts': html = viewContacts(); break;
+      case 'survey': html = viewSurvey(); break;
+      case 'schedule': html = viewSchedule(); break;
+      case 'photos': html = viewPhotos(); break;
+      case 'edit': html = viewEdit(); break;
+      case 'done': html = viewDone(); break;
+    }
+    $app.innerHTML = '<div class="company-tag">' + esc(cur.info.company || '업체명 미입력') + (admin ? ' <span class="badge">관리자</span>' : '') + '</div>' + html;
+  }
+  function goStep(i, keepScroll) {
+    stepIdx = Math.max(0, Math.min(STEPS.length - 1, i)); view = 'step';
+    if (STEPS[stepIdx].key === 'schedule') fillScheduleDefaults();
+    cur.lastStep = stepIdx; save();
+    render(); if (!keepScroll) window.scrollTo(0, 0);
+  }
+
+  /* 처음 화면 */
+  function renderHome() {
+    Store.all().then(function (list) {
+      var h = '<section class="hero"><h1>위험성평가 결과보고서</h1><p>질문에 답하고 사진만 넣으면<br><b>PDF 보고서</b>가 완성됩니다.</p></section>';
+      h += '<label class="admin-toggle"><input type="checkbox" data-act="admin"' + (admin ? ' checked' : '') + '><span>관리자 모드 <small>(여러 업체를 작성할 때)</small></span></label>';
+      if (!admin) {
+        var last = list.filter(function (c) { return c.id === Settings.get('currentId'); })[0] || list[0];
+        if (last) {
+          h += '<div class="card"><div class="card-sub">작성 중인 보고서</div><div class="card-title">' + esc(last.info.company || '업체명 미입력') + '</div>' +
+            '<div class="card-sub">' + esc(last.info.contract || '') + '</div>' +
+            '<button class="btn btn-primary btn-big" data-act="open" data-id="' + last.id + '">이어서 작성하기 ▶</button>' +
+            '<button class="btn btn-ghost" data-act="restart" data-id="' + last.id + '">처음부터 새로 작성</button></div>';
+        } else {
+          h += '<button class="btn btn-primary btn-big" data-act="new">작성 시작하기 ▶</button>';
+        }
+        h += '<p class="note">입력한 내용은 <b>이 휴대폰 안에만</b> 저장되고 어디로도 보내지지 않습니다.</p>';
+        h += '<details class="more"><summary>다른 휴대폰으로 옮기기</summary><p class="note">파일로 저장한 뒤, 다른 휴대폰에서 「불러오기」를 누르세요.</p><div class="row2"><button class="btn btn-ghost" data-act="export">파일로 저장</button><button class="btn btn-ghost" data-act="import">불러오기</button></div></details>';
+      } else {
+        h += '<div class="list-head"><h2>업체 목록 <small>(' + list.length + '곳)</small></h2><button class="btn btn-primary" data-act="new">＋ 새 업체</button></div>';
+        if (!list.length) h += '<p class="note">아직 업체가 없습니다. 「＋ 새 업체」를 누르세요.</p>';
+        list.forEach(function (c) {
+          var ws = (c.workers || []).filter(function (w) { return w.name; }).map(function (w) { return esc(w.name); });
+          var ev = L.evalSummary(c);
+          h += '<div class="card co">' +
+            '<div class="card-title">' + esc(c.info.company || '업체명 미입력') + '</div>' +
+            '<div class="card-sub">' + esc(c.info.contract || '계약명 미입력') + '</div>' +
+            '<div class="card-sub">근로자 ' + ws.length + '명' + (ws.length ? ' : ' + ws.join(', ') : '') + '</div>' +
+            '<div class="card-sub">설문 ' + (ev.done ? '완료 (' + ev.grade + ')' : '진행 중') + ' · ' + new Date(c.updatedAt || Date.now()).toLocaleDateString('ko-KR') + '</div>' +
+            '<div class="row4"><button class="btn btn-primary" data-act="open" data-id="' + c.id + '">열기</button>' +
+            '<button class="btn btn-ghost" data-act="openWorkers" data-id="' + c.id + '">근로자</button>' +
+            '<button class="btn btn-ghost" data-act="copy" data-id="' + c.id + '">복사</button>' +
+            '<button class="btn btn-danger" data-act="delete" data-id="' + c.id + '">삭제</button></div></div>';
+        });
+        h += '<div class="card"><div class="card-title">백업</div><p class="note">모든 업체(사진 포함)를 파일 하나로 저장하거나 불러옵니다.</p><div class="row2"><button class="btn btn-ghost" data-act="export">전체 파일로 저장</button><button class="btn btn-ghost" data-act="import">파일 불러오기</button></div></div>';
+      }
+      $app.innerHTML = h;
+    });
+  }
+
+  /* 1. 기본 정보 */
+  function viewInfo() {
+    return '<p class="lead">보고서 곳곳에 자동으로 들어갈 정보입니다.</p>' +
+      field('계약명 (용역명)', 'info.contract', { req: 1, ph: '예) 2026년 ○○지사 제설작업 용역' }) +
+      field('업체명', 'info.company', { req: 1, ph: '예) ○○건설기계' }) +
+      field('대표자 성명', 'info.ceo', { req: 1, ph: '예) 홍길동' }) +
+      field('대표자 휴대폰', 'info.ceoPhone', { type: 'tel', ph: '010-0000-0000' }) +
+      field('업종', 'info.bizType', { chips: ['건설기계 대여업', '제설 용역', '화물 운송업'], ph: '직접 입력도 됩니다' }) +
+      '<label class="field"><span class="lab">사업장 주소</span><button type="button" class="btn btn-ghost" data-act="addr">🔍 주소 찾기</button>' +
+      '<input type="text" data-bind="info.address" value="' + esc(cur.info.address || '') + '" placeholder="주소 찾기를 누르거나 직접 입력">' +
+      '<input type="text" data-bind="info.addressDetail" value="' + esc(cur.info.addressDetail || '') + '" placeholder="나머지 주소 (동·호수 등)"></label>' +
+      field('계약 시작일', 'info.contractStart', { type: 'date' }) + field('계약 종료일', 'info.contractEnd', { type: 'date' }) +
+      field('보고서 작성일', 'info.writeDate', { type: 'date', hint: '표지와 문서 안의 연도·날짜가 이 날짜로 들어갑니다.' }) +
+      field('담당 지사', 'info.branch', { ph: '예) 영동', hint: '「○○지사」의 ○○만 적으세요. 교육 장소에 쓰입니다.' });
+  }
+
+  /* 2. 근로자 */
+  function viewWorkers() {
+    var h = '<p class="lead">함께 일하는 근로자를 적어 주세요.</p>';
+    cur.workers.forEach(function (w, i) {
+      h += '<div class="card"><div class="card-head"><b>근로자 ' + (i + 1) + '</b>' + (cur.workers.length > 1 ? '<button class="btn btn-danger btn-sm" data-act="delWorker" data-i="' + i + '">삭제</button>' : '') + '</div>' +
+        field('이름', 'workers.' + i + '.name', { ph: '예) 김영수' }) +
+        field('휴대폰', 'workers.' + i + '.phone', { type: 'tel', ph: '010-0000-0000' }) +
+        field('하는 일', 'workers.' + i + '.role', { chips: ['운전원', '작업자', '신호수'], ph: '직접 입력도 됩니다' }) + '</div>';
+    });
+    h += '<button class="btn btn-ghost btn-big" data-act="addWorker">＋ 근로자 추가</button>';
+    var n = cur.workers.filter(function (w) { return w.name; }).length;
+    h += field('근로자 수', 'info.workerCount', { type: 'num', ph: '비워 두면 자동: ' + n + '명', hint: '비워 두면 위 명단 수(' + n + '명)로 들어갑니다.' });
+    h += '<div class="card"><div class="card-head"><b>근로자 중에 해당하는 분이 있나요?</b></div><p class="hint">해당하면 눌러서 ■ 표시하세요.</p><div class="chips big">' +
+      T.FIXED.traits.map(function (t) { var on = !!cur.traits[t[0]]; return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-act="trait" data-k="' + t[0] + '">' + (on ? '■ ' : '□ ') + t[1] + '</button>'; }).join('') + '</div></div>';
+    return h;
+  }
+
+  /* 3. 비상연락처 */
+  function viewContacts() {
+    var h = '<p class="lead">사고가 났을 때 연락할 곳입니다.</p><h3 class="sec">가족 비상연락처</h3>';
+    cur.emergency.forEach(function (e, i) {
+      h += '<div class="card"><div class="card-head"><b>비상연락처 ' + (i + 1) + '</b></div>' +
+        field('관계', 'emergency.' + i + '.rel', { chips: RELS.map(function (r) { return [r[0], r[1]]; }), noInput: 1 }) +
+        field('이름', 'emergency.' + i + '.name') + field('휴대폰', 'emergency.' + i + '.phone', { type: 'tel', ph: '010-0000-0000' }) + '</div>';
+    });
+    h += '<h3 class="sec">긴급 구호기관</h3><p class="hint">작업장에서 가까운 곳을 적어 주세요. 모르면 비워 두셔도 됩니다.</p>';
+    [['fire', '119 안전센터', '예) 강릉 119안전센터'], ['hospital', '병원', '예) 강릉○○병원'], ['police', '경찰서', '예) 강릉경찰서'], ['patrol', '고속도로 순찰대', '예) 고속도로 ○지구대 순찰대']].forEach(function (a) {
+      h += '<div class="card"><div class="card-head"><b>' + a[1] + '</b></div>' + field('이름', 'agencies.' + a[0] + '.name', { ph: a[2] }) + field('전화번호', 'agencies.' + a[0] + '.phone', { type: 'tel', ph: '000-000-0000' }) + '</div>';
+    });
+    return h;
+  }
+
+  /* 4. 설문 */
+  function viewSurvey() {
+    var w = L.walk(cur.answers), Q = L.Q;
+    var idx = w.pending ? L.ROOTS.indexOf(rootOf(w.pending)) : L.ROOTS.length;
+    var bar = '<div class="sv-prog"><span>' + Math.min(idx + 1, L.ROOTS.length) + ' / ' + L.ROOTS.length + '</span><div class="sv-bar"><i style="width:' + (idx / L.ROOTS.length * 100) + '%"></i></div></div>';
+    if (w.pending) {
+      var q = Q[w.pending];
+      var h = bar + '<div class="sv-card"><div class="sv-topic">' + esc(L.ITEM_TITLE[q.item] || '') + '</div><div class="sv-q">' + esc(q.text) + '</div>' + (q.help ? '<div class="sv-help">' + esc(q.help) + '</div>' : '');
+      if (q.type === 'count') {
+        var a = cur.accident;
+        h += counter('사고 건수', 'cases', a.cases) + counter('다친 사람 수', 'injured', a.injured) + counter('돌아가신 분 수', 'dead', a.dead) +
+          '<button class="btn btn-primary btn-big" data-act="ans" data-q="' + w.pending + '" data-v="done">확인</button>';
+      } else {
+        h += '<div class="ox"><button class="ox-btn o" data-act="ans" data-q="' + w.pending + '" data-v="O"><span>⭕</span>예</button>' +
+          '<button class="ox-btn x" data-act="ans" data-q="' + w.pending + '" data-v="X"><span>❌</span>아니요</button></div>';
+        if (q.U) h += '<button class="btn btn-ghost btn-big" data-act="ans" data-q="' + w.pending + '" data-v="U">모르겠어요</button>';
+      }
+      h += '</div>';
+      var answered = w.path.filter(function (id) { return cur.answers[id]; });
+      if (answered.length) h += '<button class="btn btn-ghost" data-act="ansBack">↩ 앞 질문 다시 답하기</button>';
+      return h;
+    }
+    var ev = L.evalSummary(cur);
+    var h2 = '<div class="sv-done"><div class="sv-done-t">설문을 모두 마쳤습니다 👍</div>' +
+      '<div class="score"><b>' + (ev.total != null ? ev.total : '-') + '</b>점 <span class="grade">' + esc(ev.grade) + '</span></div>' +
+      (ev.note ? '<div class="hint">' + esc(ev.note) + '</div>' : '') +
+      (ev.grade && 'CD'.indexOf(ev.grade[0]) >= 0 ? '<div class="warn">B등급(70점) 미만입니다. 원본 기준에 따라 보완 후 재평가가 필요할 수 있습니다.</div>' : '') + '</div>';
+    h2 += '<h3 class="sec">내 답변 (누르면 다시 답할 수 있어요)</h3><div class="ans-list">';
+    L.ROOTS.forEach(function (r) {
+      var it = Q[r].item, ids = w.path.filter(function (id) { return it === 'info' ? id === r : Q[id].item === it; });
+      var txt = ids.map(function (id) { var a = cur.answers[id]; return a === 'O' ? '⭕' : a === 'X' ? '❌' : a === 'U' ? '모름' : a === 'done' ? '입력' : ''; }).join(' → ');
+      var sc = ev.scores[it];
+      h2 += '<button class="ans-row" data-act="redo" data-item="' + it + '" data-root="' + r + '"><span class="ans-t">' + esc(Q[r].text) + '</span><span class="ans-a">' + txt + (typeof sc === 'number' ? ' <small>(' + sc + '점)</small>' : sc === 'exclude' ? ' <small>(제외)</small>' : '') + '</span></button>';
+    });
+    return h2 + '</div>';
+  }
+  function rootOf(id) {
+    var it = L.Q[id].item;
+    if (it === 'info') return id;
+    for (var i = 0; i < L.ROOTS.length; i++) if (L.Q[L.ROOTS[i]].item === it) return L.ROOTS[i];
+    return id;
+  }
+  function counter(label, k, v) {
+    return '<div class="counter"><span>' + label + '</span><button class="cbtn" data-act="cnt" data-k="' + k + '" data-d="-1">－</button><b>' + (v || 0) + '</b><button class="cbtn" data-act="cnt" data-k="' + k + '" data-d="1">＋</button></div>';
+  }
+
+  /* 5. 일정 */
+  function fillScheduleDefaults() {
+    var s = cur.schedule, wd = cur.info.writeDate || D.today();
+    var place = (cur.info.branch ? cur.info.branch.replace(/지사$/, '') + '지사 회의실, ' : '') + (cur.info.company ? cur.info.company + ' 사무실' : '');
+    ['patrolDate', 'preEduDate', 'interviewDate', 'postEduDate'].forEach(function (k) { if (!s[k]) s[k] = wd; });
+    if (!s.preEduPlace && place) s.preEduPlace = place;
+    if (!s.postEduPlace && place) s.postEduPlace = place;
+  }
+  function viewSchedule() {
+    return '<p class="lead">교육과 점검을 한 날짜입니다. 처음에는 작성일로 채워져 있어요.</p>' +
+      '<div class="card"><div class="card-head"><b>사전 교육</b> <small>(평가 시작 전)</small></div>' + field('날짜', 'schedule.preEduDate', { type: 'date' }) + field('장소', 'schedule.preEduPlace', { ph: '예) 영동지사 회의실, ○○ 사무실' }) + '</div>' +
+      '<div class="card"><div class="card-head"><b>사업장 순회점검</b></div>' + field('날짜', 'schedule.patrolDate', { type: 'date' }) + '</div>' +
+      '<div class="card"><div class="card-head"><b>근로자 의견 듣기 (청취조사)</b></div>' + field('날짜', 'schedule.interviewDate', { type: 'date' }) + '</div>' +
+      '<div class="card"><div class="card-head"><b>결과 교육</b> <small>(평가 끝난 뒤)</small></div>' + field('날짜', 'schedule.postEduDate', { type: 'date' }) + field('장소', 'schedule.postEduPlace') + '</div>';
+  }
+
+  /* 6. 사진 */
+  function viewPhotos() {
+    var h = '<p class="lead">사진을 찍거나 앨범에서 고르세요. <b>크기는 자동으로 맞춰집니다.</b></p>';
+    PHOTO_SLOTS.forEach(function (s) {
+      var p = cur.photos[s.k];
+      h += '<div class="card photo"><div class="card-head"><b>' + s.label + '</b>' + (p ? '<span class="ok">✔ 넣음</span>' : '') + '</div>' +
+        '<div class="ph-box" style="aspect-ratio:' + s.aspect + '">' + (p ? '<img src="' + p + '" alt="">' : '<span>사진 없음</span>') + '</div>' +
+        '<div class="row2"><label class="btn btn-primary file-btn">📷 사진 찍기<input type="file" accept="image/*" capture="environment" data-photo="' + s.k + '"></label>' +
+        '<label class="btn btn-ghost file-btn">🖼 앨범에서<input type="file" accept="image/*" data-photo="' + s.k + '"></label></div>' +
+        (p ? '<div class="row2"><button class="btn btn-ghost" data-act="recrop" data-k="' + s.k + '">✂ 다시 자르기</button><button class="btn btn-danger" data-act="delPhoto" data-k="' + s.k + '">사진 빼기</button></div>' : '') + '</div>';
+    });
+    return h;
+  }
+
+  /* 7. 내용 수정 */
+  var KRAS_TYPES = ['충돌위험 부분', '기계(설비)의 낙하, 비래, 전복, 붕괴, 전도 위험 부분', '중량물 취급작업', '추락위험 부분(개구부 등)', '화재·폭발위험', '아크, 전기화재, 감전', '기후(한랭)', '넘어짐(미끄러짐, 걸림, 헛디딤)', '끼임(감김)'];
+  var CLS_TYPES = ['1. 기계설비적요인', '2. 전기적 요인', '3. 화학적 요인', '4. 생물학적 요인', '5. 작업특성 요인', '6. 작업환경 요인'];
+  var EDIT_SECS = [
+    { id: 'process', title: '사업장 개요 · 공정 (16쪽)', paths: ['process', 'work', 'resultSubName'], render: function () {
+      return field('공정명', 'edit.process.name') + field('작업 이름', 'edit.work') + field('세부공정명', 'edit.resultSubName') +
+        field('공정설명', 'edit.process.desc', { type: 'area', rows: 4 }) + field('설비', 'edit.process.equip', { type: 'area', rows: 2 }) + field('물질', 'edit.process.material');
+    } },
+    { id: 'equip', title: '기계·기구 및 설비, 위험정보 (17쪽)', paths: ['equipment', 'chemicals', 'info'], render: function () {
+      var h = listEditor('edit.equipment', [{ k: 'name', l: '설비명' }, { k: 'qty', l: '수량' }], { name: '', qty: '1대' }, '설비');
+      h += '<h4>유해화학물질</h4>' + listEditor('edit.chemicals', [{ k: 'name', l: '화학물질명' }, { k: 'amount', l: '취급량(일)' }, { k: 'time', l: '취급시간' }], { name: '', amount: '', time: '' }, '화학물질');
+      var hv = cur.edit.info.heavy;
+      h += '<h4>중량물 인력 취급</h4>' + field('단위 중량', 'edit.info.heavy.unit') + '<div class="chips">' +
+        [['lift', '들기'], ['push', '밀기'], ['pull', '끌기'], ['none', '해당무']].map(function (o) { return '<button class="chip' + (hv[o[0]] ? ' on' : '') + '" data-act="toggle" data-path="edit.info.heavy.' + o[0] + '">' + (hv[o[0]] ? '■ ' : '□ ') + o[1] + '</button>'; }).join('') + '</div>';
+      h += field('작업환경측정', 'edit.info.envMeasure', { chips: [['yes', '측정'], ['no', '미측정'], ['none', '해당무']], noInput: 1 });
+      return h;
+    } },
+    { id: 'patrol', title: '순회점검 조사표 (18~19쪽)', paths: ['patrol'], render: function () {
+      return listEditor('edit.patrol', [{ k: 'text', l: '유해·위험 작업', t: 'area' }, { k: 'type', l: '사고·질병의 유형', list: KRAS_TYPES }], { text: '', type: '' }, '항목');
+    } },
+    { id: 'cases', title: '재해 유사사례 (20쪽)', paths: ['cases'], render: function () {
+      return listEditor('edit.cases', [{ k: 'kind', l: '구분' }, { k: 'year', l: '연도', num: 1 }, { k: 'org', l: '기관명' }, { k: 'text', l: '사고내용', t: 'area' }, { k: 'note', l: '비고' }], { kind: '부상', year: '', org: '', text: '', note: '' }, '사례');
+    } },
+    { id: 'msds', title: 'MSDS 목록 (21쪽)', paths: ['msds'], render: function () {
+      return listEditor('edit.msds', [{ k: 'name', l: '물질명' }, { k: 'cas', l: 'CAS No.' }, { k: 'use', l: '사용량(ℓ·㎏/일)' }, { k: 'store', l: '저장량(ℓ·㎏/일)' }, { k: 'purpose', l: '용도' }], { name: '', cas: '-', use: '', store: '', purpose: '' }, '물질');
+    } },
+    { id: 'hazard', title: '유해위험요인 분류 (22쪽)', paths: ['hazardChecks', 'hazardEquip', 'hazardMaterial'], render: function () {
+      var set = {}; cur.edit.hazardChecks.forEach(function (k) { set[k] = 1; });
+      var h = '<p class="hint">해당하는 것을 눌러 ■ 표시하세요.</p>';
+      T.FIXED.hazardGroups.forEach(function (g) {
+        h += '<h4>' + g.no + ' ' + g.name + '</h4><div class="chips">' + g.items.map(function (it) { return '<button class="chip' + (set[it[0]] ? ' on' : '') + '" data-act="hz" data-k="' + it[0] + '">' + (set[it[0]] ? '■ ' : '□ ') + it[0] + ' ' + esc(it[1]) + '</button>'; }).join('') + '</div>';
+      });
+      return h + field('설비', 'edit.hazardEquip') + field('물질', 'edit.hazardMaterial');
+    } },
+    { id: 'results', title: '위험성평가 결과서 (23~26쪽)', paths: ['results'], render: renderResults },
+    { id: 'edu', title: '교육 내용 (28·30쪽)', paths: ['preEdu', 'postEdu'], render: function () {
+      return '<h4>사전 교육 내용</h4>' + strList('edit.preEdu.topics', '교육 내용') + '<h4>결과 교육 내용</h4>' + strList('edit.postEdu.topics', '교육 내용') +
+        '<p class="hint">{Y}는 작성연도로 바뀝니다.</p>';
+    } },
+    { id: 'interviews', title: '근로자 청취조사 (29쪽)', paths: ['interviews'], render: function () {
+      var opts = cur.workers.map(function (w, i) { return [String(i), w.name || '근로자 ' + (i + 1)]; });
+      return listEditor('edit.interviews', [{ k: 'worker', l: '말한 근로자', pick: opts }, { k: 'work', l: '대상공종' }, { k: 'opinion', l: '근로자 의견', t: 'area' }, { k: 'reply', l: '위험성평가 담당자 의견', t: 'area' }], { work: '', opinion: '', reply: '', worker: 0 }, '경험담');
+    } },
+    { id: 'budget', title: '안전예산 (38쪽)', paths: ['budget'], render: function () {
+      return '<p class="hint">금액은 천원 단위 숫자로 적으세요. 「계」는 자동으로 더해집니다.</p>' + listEditor('edit.budget', [{ k: 'item', l: '구분' }, { k: 'amount', l: '예산(천원)', num: 1 }], { item: '- ', amount: '' }, '항목');
+    } },
+    { id: 'danger', title: '위험작업 관리계획 (39쪽)', paths: ['dangerWork'], render: function () {
+      return listEditor('edit.dangerWork', [{ k: 'work', l: '작업내용' }, { k: 'place', l: '위치' }, { k: 'detail', l: '세부 공종 예시', t: 'area' }, { k: 'yes', l: '해당 여부', bool: 1 }], { work: '', place: '', detail: '', yes: true }, '작업');
+    } },
+    { id: 'ppe', title: '개인보호구 (40쪽)', paths: ['ppe'], render: function () {
+      return '<p class="hint">대상자 칸에는 근로자 명단이 자동으로 들어갑니다. 아래 소속/팀 이름이 그 밑에 붙습니다.</p>' + field('소속 / 팀 이름', 'edit.ppe.team') +
+        listEditor('edit.ppe.rows', [{ k: 'plan', l: '지급계획', t: 'area' }, { k: 'note', l: '비고' }], { plan: '', note: '' }, '지급계획') +
+        '<h4>관리·운영방안</h4>' + strList('edit.ppe.mgmt', '방안');
+    } },
+    { id: 'insp', title: '안전점검 계획 (41쪽)', paths: ['inspection', 'inspectionPlan'], render: function () {
+      return listEditor('edit.inspection', [{ k: 'proc', l: '공정' }, { k: 'risk', l: '위험요소', t: 'area' }, { k: 'check', l: '안전점검사항', t: 'area' }, { k: 'note', l: '비고' }], { proc: '', risk: '· ', check: '· ', note: '' }, '공정') +
+        '<h4>점검계획</h4>' + strList('edit.inspectionPlan', '점검계획');
+    } },
+    { id: 'eduRec', title: '교육실적 (42쪽)', paths: ['eduRecord', 'eduPhotoLabel'], render: function () {
+      return '<p class="hint">「신규 근로자 채용 시」의 실시(O/X)는 설문 답에 따라 자동으로 들어갑니다(자동).</p>' +
+        listEditor('edit.eduRecord', [{ k: 'kind', l: '구분' }, { k: 'target', l: '대상' }, { k: 'std', l: '기준' }, { k: 'done', l: '실시', pick: [['auto', '자동'], ['O', 'O'], ['X', 'X']] }, { k: 'note', l: '비고' }], { kind: '', target: '근로자', std: '-', done: 'O', note: '' }, '교육') +
+        field('사진 내용', 'edit.eduPhotoLabel');
+    } },
+    { id: 'emer', title: '비상대책 흐름도 (44쪽)', paths: ['emergencyFlow'], render: function () {
+      return listEditor('edit.emergencyFlow', [{ k: 'step', l: '단계' }, { k: 'text', l: '내용', t: 'area' }], { step: '', text: '▪ ' }, '단계');
+    } }
+  ];
+  function listEditor(path, fields, tmpl, noun) {
+    var arr = getP(cur, path) || [], h = '';
+    arr.forEach(function (it, i) {
+      h += '<div class="li"><div class="li-head"><b>' + noun + ' ' + (i + 1) + '</b><span>' +
+        (i > 0 ? '<button class="btn btn-sm btn-ghost" data-act="mv" data-path="' + path + '" data-i="' + i + '" data-d="-1">▲</button>' : '') +
+        '<button class="btn btn-sm btn-danger" data-act="rm" data-path="' + path + '" data-i="' + i + '">삭제</button></span></div>';
+      fields.forEach(function (f) {
+        var p = path + '.' + i + '.' + f.k;
+        if (f.bool) {
+          var on = !!it[f.k];
+          h += '<div class="field"><span class="lab">' + f.l + '</span><div class="chips"><button class="chip' + (on ? ' on' : '') + '" data-act="setv" data-path="' + p + '" data-json="true">√ 해당</button><button class="chip' + (!on ? ' on' : '') + '" data-act="setv" data-path="' + p + '" data-json="false">해당 없음</button></div></div>';
+        } else if (f.pick) {
+          h += '<div class="field"><span class="lab">' + f.l + '</span><div class="chips">' + f.pick.map(function (o) { return '<button class="chip' + (String(it[f.k]) === o[0] ? ' on' : '') + '" data-act="setv" data-path="' + p + '" data-val="' + esc(o[0]) + '">' + esc(o[1]) + '</button>'; }).join('') + '</div></div>';
+        } else if (f.list) {
+          h += field(f.l, p, { type: f.t, chips: f.list, hint: '아래에서 고르거나 직접 적으세요' });
+        } else {
+          h += field(f.l, p, { type: f.t === 'area' ? 'area' : f.num ? 'num' : 'text', rows: 3 });
+        }
+      });
+      h += '</div>';
+    });
+    h += '<button class="btn btn-ghost" data-act="add" data-path="' + path + '" data-tmpl="' + esc(JSON.stringify(tmpl)) + '">＋ ' + noun + ' 추가</button>';
+    return h;
+  }
+  function strList(path, noun) {
+    var arr = getP(cur, path) || [], h = '';
+    arr.forEach(function (s, i) {
+      h += '<div class="sl"><textarea rows="2" data-bind="' + path + '.' + i + '">' + esc(s) + '</textarea><button class="btn btn-sm btn-danger" data-act="rm" data-path="' + path + '" data-i="' + i + '">삭제</button></div>';
+    });
+    return h + '<button class="btn btn-ghost" data-act="add" data-path="' + path + '" data-tmpl="&quot;&quot;">＋ ' + noun + ' 추가</button>';
+  }
+  function renderResults() {
+    var arr = cur.edit.results, h = '<p class="hint">가능성 × 중대성 = 위험성이 자동으로 계산됩니다. 위험성이 <b>보통(4) 이상</b>이면 감소대책을 적어 주세요.</p>';
+    arr.forEach(function (r, i) {
+      var p = 'edit.results.' + i, rv = (+r.p || 0) * (+r.s || 0), lv = rv >= 6 ? '높음' : rv === 4 ? '보통' : rv ? '낮음' : '';
+      h += '<div class="li"><div class="li-head"><b>' + (i + 1) + '. ' + esc(r.task || '') + '</b><span>' + (i > 0 ? '<button class="btn btn-sm btn-ghost" data-act="mv" data-path="edit.results" data-i="' + i + '" data-d="-1">▲</button>' : '') + '<button class="btn btn-sm btn-danger" data-act="rm" data-path="edit.results" data-i="' + i + '">삭제</button></span></div>' +
+        field('세부작업', p + '.task') + field('위험분류', p + '.cls', { chips: CLS_TYPES }) +
+        field('유해·위험 상황 및 결과', p + '.situation', { type: 'area' }) + field('현재 안전보건조치', p + '.measure', { type: 'area', rows: 4 }) +
+        field('재해사례', p + '.cases') +
+        pick123('가능성(빈도)', p + '.p', r.p, ['하', '중', '상']) + pick123('중대성(강도)', p + '.s', r.s, ['소', '중', '대']) +
+        '<div class="risk r' + (rv >= 6 ? 'h' : rv === 4 ? 'm' : 'l') + '">위험성 = ' + (rv || '-') + (lv ? ' (' + lv + ')' : '') + '</div>';
+      var needRed = rv >= 4;
+      if (needRed) h += '<div class="warn">위험성이 ' + lv + '입니다. 감소대책을 적어 주세요.</div>';
+      h += '<details class="sub"' + (needRed || r.redText ? ' open' : '') + '><summary>감소대책 · 개선 (선택)</summary>' +
+        field('NO', p + '.redNo') + field('감소대책 세부내용', p + '.redText', { type: 'area' }) + field('개선후 위험성', p + '.after') +
+        field('개선 예정일', p + '.plan') + field('완료일', p + '.done') + field('담당자', p + '.owner') + '</details></div>';
+    });
+    h += '<button class="btn btn-ghost" data-act="add" data-path="edit.results" data-tmpl="' + esc(JSON.stringify({ task: '', cls: '1. 기계설비적요인', situation: '', measure: '', cases: '', p: 1, s: 2, redNo: '', redText: '', after: '', plan: '', done: '', owner: '' })) + '">＋ 위험요인 추가</button>';
+    return h;
+  }
+  function pick123(label, path, v, names) {
+    return '<div class="field"><span class="lab">' + label + '</span><div class="chips">' + [1, 2, 3].map(function (n) {
+      return '<button class="chip num' + (+v === n ? ' on' : '') + '" data-act="setv" data-path="' + path + '" data-json="' + n + '">' + n + ' (' + names[n - 1] + ')</button>';
+    }).join('') + '</div></div>';
+  }
+  function viewEdit() {
+    var h = '<p class="lead">원본 내용이 이미 들어 있습니다. <b>고칠 것이 없으면 그냥 「다음」</b>을 누르세요.</p>';
+    EDIT_SECS.forEach(function (s) {
+      h += '<details class="sec-box" data-sec="' + s.id + '"' + (openSec[s.id] ? ' open' : '') + '><summary>' + s.title + '</summary><div class="sec-body">' +
+        (openSec[s.id] ? s.render() + '<button class="btn btn-ghost btn-reset" data-act="resetSec" data-sec="' + s.id + '">↺ 이 부분을 원본 내용으로 되돌리기</button>' : '') + '</div></details>';
+    });
+    return h;
+  }
+
+  /* 8. 완성 */
+  function viewDone() {
+    var i = cur.info, w = L.walk(cur.answers), ev = L.evalSummary(cur);
+    var nW = cur.workers.filter(function (x) { return x.name; }).length;
+    var nP = PHOTO_SLOTS.filter(function (s) { return cur.photos[s.k]; }).length;
+    var checks = [
+      [!!i.contract, '계약명', 0], [!!i.company, '업체명', 0], [!!i.ceo, '대표자 성명', 0], [!!i.contractStart && !!i.contractEnd, '계약기간', 0],
+      [nW > 0, '근로자 이름', 1], [!w.pending, '설문', 3], [nP === PHOTO_SLOTS.length, '사진 (' + nP + '/' + PHOTO_SLOTS.length + ')', 5]
+    ];
+    var h = '<div class="sv-done"><div class="sv-done-t">보고서 준비 상태</div>';
+    if (ev.done) h += '<div class="score">평가표 <b>' + ev.total + '</b>점 <span class="grade">' + esc(ev.grade) + '</span></div>';
+    h += '</div><div class="checks">' + checks.map(function (c) {
+      return '<div class="chk ' + (c[0] ? 'ok' : 'no') + '"><span>' + (c[0] ? '✔' : '!') + ' ' + c[1] + '</span>' + (c[0] ? '' : '<button class="btn btn-sm btn-ghost" data-act="goto" data-i="' + c[2] + '">채우러 가기</button>') + '</div>';
+    }).join('') + '</div>';
+    var missing = checks.filter(function (c) { return !c[0]; }).length;
+    if (missing) h += '<p class="note">빠진 것이 있어도 PDF는 만들 수 있습니다. 빈칸은 비워진 채로 나옵니다.</p>';
+    h += '<button class="btn btn-primary btn-huge" data-act="pdf">📄 PDF 받기</button>' +
+      '<button class="btn btn-ghost btn-big" data-act="pdfView">👀 PDF 미리 보기</button>' +
+      '<p class="note">PDF를 받은 뒤 <b>출력해서 서명칸에 서명</b>하세요.<br>처음 만들 때는 글꼴을 받느라 10~20초 걸릴 수 있어요.</p>';
+    return h;
+  }
+
+  /* ---------- PDF ---------- */
+  var fontCache = null, pdfLibP = null, flowCache = null;
+  function loadScript(src) { return new Promise(function (res, rej) { var s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+  function blobToDataURL(b) { return new Promise(function (res) { var r = new FileReader(); r.onload = function () { res(r.result); }; r.readAsDataURL(b); }); }
+  function fetchDataURL(u) { return fetch(u).then(function (r) { if (!r.ok) throw new Error(u); return r.blob(); }).then(blobToDataURL); }
+  function prepPdf() {
+    pdfLibP = pdfLibP || loadScript('lib/pdfmake.min.js');
+    var fp = fontCache ? Promise.resolve(fontCache) : Promise.all([fetchDataURL('fonts/NotoSansKR-Regular.otf'), fetchDataURL('fonts/NotoSansKR-Bold.otf')]).then(function (a) {
+      fontCache = { r: a[0].split(',')[1], b: a[1].split(',')[1] }; return fontCache;
+    });
+    var ip = flowCache ? Promise.resolve(flowCache) : fetchDataURL('img/flow.jpg').then(function (d) { flowCache = d; return d; });
+    return Promise.all([pdfLibP, fp, ip]).then(function (r) {
+      var f = r[1];
+      window.pdfMake.vfs = { 'NotoKR-R.otf': f.r, 'NotoKR-B.otf': f.b };
+      window.pdfMake.fonts = { NotoKR: { normal: 'NotoKR-R.otf', bold: 'NotoKR-B.otf', italics: 'NotoKR-R.otf', bolditalics: 'NotoKR-B.otf' } };
+      return r[2];
+    });
+  }
+  function fileName() {
+    var n = (cur.info.company || '업체').replace(/[\\/:*?"<>|\s]+/g, '_');
+    return '위험성평가_' + n + '_' + (cur.info.writeDate || D.today()).replace(/-/g, '') + '.pdf';
+  }
+  function makePdf(preview) {
+    var win = null;
+    if (preview) { try { win = window.open('', '_blank'); if (win) win.document.write('<p style="font:20px sans-serif;padding:20px">PDF를 만드는 중입니다…</p>'); } catch (e) { win = null; } }
+    busy(true, 'PDF를 만드는 중입니다…<br><small>처음에는 10~20초 걸릴 수 있어요</small>');
+    prepPdf().then(function (flow) {
+      var dd = PDFDOC.build(cur, { flow: flow });
+      return new Promise(function (res, rej) { try { window.pdfMake.createPdf(dd).getBlob(res); } catch (e) { rej(e); } });
+    }).then(function (blob) {
+      busy(false);
+      var url = URL.createObjectURL(blob);
+      if (preview && win) { win.location.href = url; return; }
+      var a = document.createElement('a'); a.href = url; a.download = fileName(); document.body.appendChild(a); a.click(); a.remove();
+      toast('PDF를 저장했습니다. 휴대폰의 「다운로드」 폴더를 확인하세요.');
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    }).catch(function (e) {
+      busy(false); if (win) win.close();
+      console.error(e); alert('PDF를 만들지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.\n(' + (e && e.message ? e.message : e) + ')');
+    });
+  }
+  function busy(on, msg) {
+    var m = document.getElementById('modal');
+    if (on) { m.innerHTML = '<div class="busy"><div class="spin"></div><div>' + msg + '</div></div>'; m.hidden = false; }
+    else { m.hidden = true; m.innerHTML = ''; }
+  }
+
+  /* ---------- 주소 검색 (카카오 우편번호 서비스) ---------- */
+  var postLoaded = null;
+  function addrSearch() {
+    var m = document.getElementById('modal');
+    m.innerHTML = '<div class="addr"><div class="addr-head"><b>주소 찾기</b><button class="btn btn-sm btn-ghost" data-act="closeModal">닫기</button></div><div id="addrWrap" class="addr-wrap"><p class="note">불러오는 중…</p></div></div>';
+    m.hidden = false; document.body.classList.add('noscroll');
+    postLoaded = postLoaded || loadScript('https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js');
+    postLoaded.then(function () {
+      var wrap = document.getElementById('addrWrap'); wrap.innerHTML = '';
+      new window.daum.Postcode({
+        oncomplete: function (data) {
+          cur.info.address = data.roadAddress || data.jibunAddress || data.address; save();
+          closeModal(); render(); toast('주소를 넣었습니다. 나머지 주소를 적어 주세요.');
+        }, width: '100%', height: '100%'
+      }).embed(wrap);
+    }).catch(function () { document.getElementById('addrWrap').innerHTML = '<p class="note">주소 검색을 불러오지 못했습니다. 직접 입력해 주세요.</p>'; });
+  }
+  function closeModal() { var m = document.getElementById('modal'); m.hidden = true; m.innerHTML = ''; document.body.classList.remove('noscroll'); }
+  function stepMenu() {
+    var m = document.getElementById('modal');
+    m.innerHTML = '<div class="menu"><div class="addr-head"><b>단계 목록</b><button class="btn btn-sm btn-ghost" data-act="closeModal">닫기</button></div>' +
+      STEPS.map(function (s, i) { return '<button class="menu-item' + (i === stepIdx ? ' on' : '') + '" data-act="goto" data-i="' + i + '">' + (i + 1) + '. ' + s.title + '</button>'; }).join('') +
+      '<button class="menu-item home" data-act="home">⌂ 처음 화면</button></div>';
+    m.hidden = false; document.body.classList.add('noscroll');
+  }
+
+  /* ---------- 백업 ---------- */
+  function exportAll() {
+    Store.all().then(function (list) {
+      var data = admin ? list : list.filter(function (c) { return cur ? c.id === cur.id : c.id === Settings.get('currentId'); });
+      if (!data.length) data = list.slice(0, 1);
+      var blob = new Blob([JSON.stringify({ app: 'risk_assessment', v: 1, companies: data })], { type: 'application/json' });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = '위험성평가_백업_' + D.today().replace(/-/g, '') + '.json'; document.body.appendChild(a); a.click(); a.remove();
+      toast('백업 파일을 저장했습니다.');
+    });
+  }
+  function importFile() {
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
+    inp.onchange = function () {
+      var f = inp.files[0]; if (!f) return;
+      f.text().then(function (t) {
+        var d = JSON.parse(t); if (!d || !d.companies) throw new Error('형식 오류');
+        return Promise.all(d.companies.map(function (c) { return Store.put(migrate(c)); })).then(function () { return d.companies.length; });
+      }).then(function (n) { toast(n + '개 업체를 불러왔습니다.'); renderHome(); }).catch(function () { alert('불러올 수 없는 파일입니다.'); });
+    };
+    inp.click();
+  }
+
+  /* ---------- 이벤트 ---------- */
+  function openCompany(id, step) {
+    return Store.get(id).then(function (c) {
+      if (!c) return;
+      cur = migrate(c); Settings.set('currentId', cur.id);
+      goStep(step != null ? step : (cur.lastStep || 0));
+    });
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]'); if (!b) return;
+    var act = b.dataset.act;
+    if (act === 'admin') return; // change 이벤트에서 처리
+    switch (act) {
+      case 'home': closeModal(); if (cur) save(true); cur = null; view = 'home'; render(); window.scrollTo(0, 0); break;
+      case 'menu': stepMenu(); break;
+      case 'closeModal': closeModal(); break;
+      case 'goto': closeModal(); goStep(+b.dataset.i); break;
+      case 'new': cur = newCompany(); Settings.set('currentId', cur.id); save(true); goStep(0); break;
+      case 'open': openCompany(b.dataset.id); break;
+      case 'openWorkers': openCompany(b.dataset.id, 1); break;
+      case 'restart':
+        if (confirm('지금까지 입력한 내용을 지우고 처음부터 새로 작성할까요?')) { Store.del(b.dataset.id).then(function () { cur = newCompany(); Settings.set('currentId', cur.id); save(true); goStep(0); }); }
+        break;
+      case 'copy':
+        Store.get(b.dataset.id).then(function (c) { var n = clone(c); n.id = uid(); n.info.company = (n.info.company || '') + ' (복사)'; n.createdAt = Date.now(); return Store.put(n); }).then(function () { toast('복사했습니다.'); renderHome(); });
+        break;
+      case 'delete':
+        if (confirm('이 업체를 삭제할까요? 되돌릴 수 없습니다.')) Store.del(b.dataset.id).then(renderHome);
+        break;
+      case 'export': exportAll(); break;
+      case 'import': importFile(); break;
+      case 'prev': if (stepIdx === 0) { save(true); cur = null; view = 'home'; render(); } else goStep(stepIdx - 1); break;
+      case 'next': goStep(stepIdx + 1); break;
+      case 'chip': {
+        var p = b.dataset.path, v = b.dataset.val;
+        setP(cur, p, getP(cur, p) === v && /bizType|role/.test(p) ? '' : v); save(); rerender(); break;
+      }
+      case 'setv': setP(cur, b.dataset.path, b.dataset.json != null ? JSON.parse(b.dataset.json) : b.dataset.val); save(); rerender(); break;
+      case 'toggle': setP(cur, b.dataset.path, !getP(cur, b.dataset.path)); save(); rerender(); break;
+      case 'trait': cur.traits[b.dataset.k] = !cur.traits[b.dataset.k]; save(); rerender(); break;
+      case 'addWorker': cur.workers.push({ name: '', phone: '', role: '운전원' }); save(); rerender(); setTimeout(function () { var ins = $app.querySelectorAll('[data-bind$=".name"]'); if (ins.length) ins[ins.length - 1].focus(); }, 50); break;
+      case 'delWorker': if (confirm('근로자 ' + (+b.dataset.i + 1) + '을(를) 삭제할까요?')) { cur.workers.splice(+b.dataset.i, 1); save(); rerender(); } break;
+      case 'addr': addrSearch(); break;
+      case 'ans': {
+        var q = b.dataset.q; cur.answers[q] = b.dataset.v; save(); render(); window.scrollTo(0, 0); break;
+      }
+      case 'ansBack': {
+        var w = L.walk(cur.answers), ans = w.path.filter(function (id) { return cur.answers[id]; });
+        if (ans.length) delete cur.answers[ans[ans.length - 1]]; save(); render(); break;
+      }
+      case 'redo': {
+        var it = b.dataset.item;
+        Object.keys(L.Q).forEach(function (id) { if (L.Q[id].item === it && (it !== 'info' || id === b.dataset.root)) delete cur.answers[id]; });
+        save(); render(); window.scrollTo(0, 0); break;
+      }
+      case 'cnt': { var k = b.dataset.k; cur.accident[k] = Math.max(0, (cur.accident[k] || 0) + (+b.dataset.d)); save(); render(); break; }
+      case 'recrop': {
+        var sk = b.dataset.k, slot = PHOTO_SLOTS.filter(function (s) { return s.k === sk; })[0], o = cur.photosOrig[sk];
+        if (!o) { toast('원본이 없어 다시 자를 수 없어요. 사진을 다시 골라 주세요.'); break; }
+        Photo.recrop(o, slot.aspect).then(function (crop) { if (crop) { cur.photos[sk] = crop; save(true); rerender(); } });
+        break;
+      }
+      case 'delPhoto': if (confirm('이 사진을 뺄까요?')) { delete cur.photos[b.dataset.k]; delete cur.photosOrig[b.dataset.k]; save(true); rerender(); } break;
+      case 'add': { var arr = getP(cur, b.dataset.path); arr.push(JSON.parse(b.dataset.tmpl)); save(); rerender(); break; }
+      case 'rm': {
+        if (!confirm('삭제할까요?')) break;
+        getP(cur, b.dataset.path).splice(+b.dataset.i, 1); save(); rerender(); break;
+      }
+      case 'mv': { var a2 = getP(cur, b.dataset.path), i2 = +b.dataset.i, j = i2 + (+b.dataset.d); var t = a2[i2]; a2[i2] = a2[j]; a2[j] = t; save(); rerender(); break; }
+      case 'hz': { var hc = cur.edit.hazardChecks, ix = hc.indexOf(b.dataset.k); if (ix >= 0) hc.splice(ix, 1); else hc.push(b.dataset.k); save(); rerender(); break; }
+      case 'resetSec': {
+        var sec = EDIT_SECS.filter(function (s) { return s.id === b.dataset.sec; })[0];
+        if (confirm('「' + sec.title + '」을(를) 원본 내용으로 되돌릴까요?')) { sec.paths.forEach(function (p) { cur.edit[p] = clone(T.DEFAULT_EDIT[p]); }); save(); rerender(); }
+        break;
+      }
+      case 'pdf': save(true); makePdf(false); break;
+      case 'pdfView': save(true); makePdf(true); break;
+    }
+  });
+  function rerender() { var y = window.scrollY; render(); window.scrollTo(0, y); }
+
+  document.addEventListener('toggle', function (e) {
+    var d = e.target; if (!d.matches || !d.matches('details.sec-box')) return;
+    var id = d.dataset.sec;
+    if (d.open && !openSec[id]) { openSec[id] = true; rerender(); }
+    else if (!d.open && openSec[id]) { delete openSec[id]; }
+  }, true);
+
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t.dataset || !t.dataset.bind || !cur) return;
+    setP(cur, t.dataset.bind, t.value); save();
+    if (t.dataset.bind === 'info.company') { var tag = document.querySelector('.company-tag'); if (tag) tag.firstChild.textContent = t.value || '업체명 미입력'; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.dataset && t.dataset.act === 'admin') { admin = t.checked; Settings.set('admin', admin); renderHome(); return; }
+    if (t.dataset && t.dataset.kind === 'tel') { var f = fmtPhone(t.value); if (f !== t.value) { t.value = f; setP(cur, t.dataset.bind, f); save(); } }
+    if (t.dataset && t.dataset.bind && t.type === 'date') { setP(cur, t.dataset.bind, t.value); save(); }
+    if (t.dataset && t.dataset.photo) {
+      var file = t.files && t.files[0], k = t.dataset.photo; t.value = '';
+      if (!file) return;
+      var slot = PHOTO_SLOTS.filter(function (s) { return s.k === k; })[0];
+      busy(true, '사진을 맞추는 중…');
+      Photo.fromFile(file, slot.aspect).then(function (r) {
+        busy(false);
+        if (!r) return;
+        cur.photos[k] = r.crop; cur.photosOrig[k] = r.orig; save(true); rerender(); toast('사진을 넣었습니다.');
+      }).catch(function (err) { busy(false); console.error(err); alert('사진을 읽지 못했습니다. 다른 사진을 골라 주세요.'); });
+    }
+  });
+  window.addEventListener('pagehide', function () { save(true); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) save(true); });
+
+  /* ---------- 카카오톡 등 앱 안의 브라우저 → 일반 브라우저로 ---------- */
+  (function inApp() {
+    var ua = navigator.userAgent || '', url = location.href;
+    if (/KAKAOTALK/i.test(ua)) { location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url); return; }
+    if (/ Line\//i.test(ua) && url.indexOf('openExternalBrowser') < 0) { location.href = url + (url.indexOf('?') < 0 ? '?' : '&') + 'openExternalBrowser=1'; return; }
+    var inapp = /NAVER\(inapp|Instagram|FBAN|FBAV|BAND\/|DaumApps|everytimeApp|SamsungBrowser\/[^ ]+ CrossApp|; wv\)/i.test(ua);
+    if (!inapp) return;
+    var box = document.getElementById('inapp');
+    if (/Android/i.test(ua)) {
+      location.href = 'intent://' + url.replace(/^https?:\/\//, '') + '#Intent;scheme=https;package=com.android.chrome;end';
+      box.innerHTML = '파일 받기가 안 될 수 있어요. <a href="intent://' + esc(url.replace(/^https?:\/\//, '')) + '#Intent;scheme=https;package=com.android.chrome;end">크롬으로 열기</a>';
+    } else {
+      box.innerHTML = '이 화면은 앱 안의 브라우저라 PDF 받기가 안 될 수 있어요.<br>오른쪽 아래(또는 위) <b>⋯ 버튼 → 「Safari로 열기」</b>를 눌러 주세요.';
+    }
+    box.hidden = false;
+  })();
+
+  /* 시작 */
+  render();
+})();

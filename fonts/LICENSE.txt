@@ -1,0 +1,3 @@
+NotoSansKR-Regular.otf / NotoSansKR-Bold.otf
+Noto Sans CJK KR (subset) - Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.
+Licensed under the SIL Open Font License, Version 1.1. https://openfontlicense.org

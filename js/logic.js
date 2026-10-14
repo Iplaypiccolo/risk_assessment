@@ -7,54 +7,56 @@
    * U: '모르겠어요' 버튼 (원본에 해당 조항이 있는 곳만)
    */
   var Q = {
-    /* 17쪽 기타 안전보건상 정보 */
-    i_sub: { item: 'info', text: '이번 작업에 다른 업체와 함께 하거나 하도급을 준 일(도급·혼재작업)이 있나요?', O: { set: ['info.subcontract', true] }, X: { set: ['info.subcontract', false] } },
-    i_permit: { item: 'info', text: '안전작업허가증이 필요한 작업(용접, 밀폐공간 작업 등)이 있나요?', O: { set: ['info.permit', true] }, X: { set: ['info.permit', false] } },
-    i_checkup: { item: 'info', text: '근로자가 건강진단을 받았나요?', O: { set: ['info.checkup', true] }, X: { set: ['info.checkup', false] } },
+    /* 작업 정보 (17쪽 기타 안전보건상 정보) */
+    i_sub: { item: 'info', text: '이번 제설 일을 다른 회사와 함께 하나요?', help: '다른 회사에 일을 나눠 맡기거나, 다른 회사 사람들과 같은 곳에서 함께 일하면 ⭕', O: {}, X: {} },
+    i_permit: { item: 'info', text: '용접처럼 불꽃이 튀는 일이나, 탱크 안처럼 좁고 막힌 곳에 들어가는 일이 있나요?', O: {}, X: {} },
+    i_checkup: { item: 'info', text: '근로자가 최근에 건강검진을 받았나요?', O: {}, X: {} },
 
-    /* 평가표 1 */
-    q1: { item: 'q1', text: '회사에 안전보건방침(안전에 대한 회사의 약속)이 있나요?', help: '이 보고서 4쪽에 안전보건방침이 들어갑니다. 대표님이 그 방침을 지키기로 하셨다면 ⭕를 누르세요.', O: 'q1b', X: { score: 3 } },
-    q1b: { item: 'q1', text: '그 방침에 맞춘 안전 목표(예: 무재해 달성)도 정했나요?', O: { score: 10 }, X: { score: 6 } },
-    /* 2-1 */
-    q2a: { item: 'q2a', text: '안전 전문인력이 있나요?', help: '안전 관련 자격증이 있거나, 안전 관련 학과를 졸업한 사람', O: 'q2a2', X: { score: 2 } },
-    q2a2: { item: 'q2a', text: '안전만 따로 맡는 조직(안전전담조직)도 있나요?', O: { score: 5 }, X: { score: 3 } },
-    /* 2-2 */
-    q2b: { item: 'q2b', text: '이번 일에 안전을 위한 돈(보호구, 방한용품, 후방카메라 등)을 쓸 계획이 있나요?', O: 'q2b2', X: { score: 2 } },
-    q2b2: { item: 'q2b', text: '어디에 얼마를 쓸지 구체적으로 정했나요?', help: '나중에 "내용 수정"의 안전예산 표에 금액을 적을 수 있어요.', O: { score: 5 }, X: { score: 3 } },
-    /* 3 */
-    q3: { item: 'q3', text: '근로자의 안전 의견을 듣는 방법(작업 전 회의, 면담 등)이 있나요?', O: { score: 5 }, X: { score: 2 } },
-    /* 4 */
-    q4: { item: 'q4', text: '위험한 작업이 무엇인지 알고 있나요?', help: '예) 좁은 창고에서 여러 장비로 하는 작업, 강설 때 고속도로에서 염화물을 뿌리는 작업', O: 'q4b', X: { score: 3 } },
-    q4b: { item: 'q4', text: '그 위험한 작업에 대한 관리계획(작업지휘자 배치, 교육 등)을 세웠나요?', O: { score: 10 }, X: { score: 6 } },
-    /* 5 */
-    q5: { item: 'q5', text: '근로자에게 보호구(안전모, 안전화, 안전조끼 등)를 나눠 주나요?', O: 'q5b', X: { score: 3 } },
-    q5b: { item: 'q5', text: '작업 전에 보호구를 제대로 썼는지 확인하나요?', O: { score: 10 }, X: { score: 6 } },
-    /* 6 */
-    q6: { item: 'q6', text: '작업 전에 안전점검을 하나요?', O: 'q6b', X: { score: 3 } },
-    q6b: { item: 'q6', text: '점검할 항목(장비 상태, 작업장 상태 등)이 정해져 있나요?', O: { score: 10 }, X: { score: 6 } },
-    /* 7 */
-    q7: { item: 'q7', text: '법으로 정한 안전교육을 했나요?', help: '예) 새로 뽑은 근로자에게 8시간 안전교육. 일용직만 있어 해당이 없으면 ⭕를 누르세요.', O: 'q7b', X: { score: 3 } },
-    q7b: { item: 'q7', text: '매일 작업 전 안전교육(TBM)을 할 계획이 있나요?', O: { score: 10 }, X: { score: 6 } },
-    /* 8 */
-    q8: { item: 'q8', text: '도로공사(발주처) 담당자와 우리 회사 사이의 연락처(연락체계)가 정해져 있나요?', O: { score: 5 }, X: { score: 2 } },
-    /* 9 */
-    q9: { item: 'q9', text: '사고가 나면 누구에게 어떻게 연락하고 대피할지 정해져 있나요?', O: { score: 10 }, X: { score: 3 } },
-    /* 10 */
-    q10: { item: 'q10', text: '회사를 세운 지(사업을 시작한 지) 1년이 넘었나요?', O: 'q10b', X: { exclude: true } },
-    q10b: { item: 'q10', text: '최근 3년 동안 일하다 다친 사람(산업재해)이 있었나요?', O: 'q10n', X: { score: 20 } },
-    q10n: { item: 'q10', type: 'count', text: '몇 건, 몇 명이었나요?', next: 'q10c' },
-    q10c: { item: 'q10', text: '그중에 사망사고가 있었나요?', O: { score: 6 }, X: 'q10d' },
-    q10d: { item: 'q10', text: '산업재해율이 같은 업종 평균보다 낮은가요?', help: '안전보건공단의 "산업재해율 확인서"로 알 수 있어요.', O: 'q10e', X: { score: 6 }, U: { score: 12 } },
-    q10e: { item: 'q10', text: '재해율이 해마다 줄고 있나요?', O: { score: 20 }, X: { score: 12 } }
+    /* 1. 안전보건 경영방침 */
+    q1: { item: 'q1', text: '사장님이 근로자에게 "우리 회사는 안전이 먼저다"라고 약속하셨나요?', help: '이 보고서 4쪽에 그 약속(안전보건방침)이 들어 있어요. 출력해서 사장님이 서명하시면 됩니다.', O: 'q1b', X: { score: 3 } },
+    q1b: { item: 'q1', text: '"올해는 다치는 사람 없이 일하자" 같은 안전 목표가 있나요?', O: { score: 10 }, X: { score: 6 } },
+    /* 2-1. 안전 전문인력 */
+    q2a: { item: 'q2a', text: '회사에 안전 자격증이 있는 사람이 있나요?', help: '예) 산업안전기사, 건설안전기사 같은 자격증. 안전 관련 학과를 졸업한 사람도 ⭕', O: 'q2a2', X: { score: 2 } },
+    q2a2: { item: 'q2a', text: '안전 일만 따로 맡아서 하는 사람이나 부서가 있나요?', O: { score: 5 }, X: { score: 3 } },
+    /* 2-2. 안전 예산 */
+    q2b: { item: 'q2b', text: '이번 일을 하면서 안전을 위해 돈을 쓰나요?', help: '예) 안전모·안전화 구입, 방한복, 손난로, 후방카메라', O: 'q2b2', X: { score: 2 } },
+    q2b2: { item: 'q2b', type: 'budget', text: '어디에 얼마를 쓰는지 적어 주세요', help: '단위는 만원입니다. 모르는 칸은 비워 두세요.', B: { score: 5 }, N: { score: 3 } },
+    /* 3. 종사자 의견 */
+    q3: { item: 'q3', text: '근로자가 "이건 위험해요"라고 말할 수 있는 자리가 있나요?', help: '예) 일 시작 전에 모여서 하는 짧은 회의(TBM), 사장님과의 면담', O: { score: 5 }, X: { score: 2 } },
+    /* 4. 위험작업 관리계획 */
+    q4: { item: 'q4', text: '어떤 일이 특히 위험한지 알고 계신가요?', help: '예) 좁은 창고에서 여러 장비가 같이 움직이는 일, 눈 올 때 고속도로에서 염화칼슘 뿌리는 일', O: 'q4b', X: { score: 3 } },
+    q4b: { item: 'q4', text: '그런 위험한 일을 할 때 지킬 것(신호수 두기, 미리 교육하기 등)을 정해 두셨나요?', O: { score: 10 }, X: { score: 6 } },
+    /* 5. 개인보호구 */
+    q5: { item: 'q5', text: '근로자에게 안전모, 안전화, 안전조끼를 나눠 주나요?', O: 'q5b', X: { score: 3 } },
+    q5b: { item: 'q5', text: '일 시작 전에 안전모·안전화를 제대로 썼는지 확인하나요?', O: { score: 10 }, X: { score: 6 } },
+    /* 6. 안전점검 */
+    q6: { item: 'q6', text: '일 시작 전에 장비와 작업장을 둘러보며 점검하나요?', O: 'q6b', X: { score: 3 } },
+    q6b: { item: 'q6', text: '무엇을 점검할지 정해져 있나요?', help: '예) 브레이크, 후방카메라, 살포기가 단단히 붙어 있는지', O: { score: 10 }, X: { score: 6 } },
+    /* 7. 교육 */
+    q7: { item: 'q7', text: '근로자를 새로 뽑았을 때 안전교육을 했나요?', help: '처음 일을 시작할 때 하는 교육(8시간)이에요. 하루씩 일하는 일용직만 있으면 ⭕', O: 'q7b', X: { score: 3 } },
+    q7b: { item: 'q7', text: '매일 일 시작 전에 짧게 안전 이야기를 하나요?', help: '「TBM」이라고도 해요.', O: { score: 10 }, X: { score: 6 } },
+    /* 8. 연락체계 */
+    q8: { item: 'q8', text: '도로공사 담당자와 서로 전화번호를 알고 연락할 수 있나요?', O: { score: 5 }, X: { score: 2 } },
+    /* 9. 비상대책 */
+    q9: { item: 'q9', text: '사고가 나면 누구에게 먼저 전화하고 어디로 피할지 정해져 있나요?', O: { score: 10 }, X: { score: 3 } },
+    /* 10. 산업재해 */
+    q10: { item: 'q10', text: '회사를 차린 지 1년이 넘었나요?', O: 'q10b', X: { exclude: true } },
+    q10b: { item: 'q10', text: '최근 3년 동안 일하다 다친 사람이 있었나요?', O: 'q10n', X: { score: 20 } },
+    q10n: { item: 'q10', type: 'count', text: '몇 번, 몇 명이었나요?', help: '숫자는 ＋ / － 버튼으로 바꾸세요.', next: 'q10d', deadScore: 6 },
+    q10d: { item: 'q10', text: '같은 일을 하는 다른 회사들보다 사고가 적었나요?', help: '안전보건공단에서 받는 「산업재해율 확인서」에 나와 있어요. 모르시면 「모르겠어요」를 누르세요.', O: 'q10e', X: { score: 6 }, U: { score: 12 } },
+    q10e: { item: 'q10', text: '사고가 해마다 줄고 있나요?', O: { score: 20 }, X: { score: 12 } },
+    /* 날짜 */
+    q_dates: { item: 'dates', text: '교육과 현장 점검을 모두 보고서 작성일({WD})에 하셨나요?', help: '날짜가 다르면 ❌를 누르고 날짜를 고르세요.', O: {}, X: 'q_dates2' },
+    q_dates2: { item: 'dates', type: 'dates', text: '날짜를 골라 주세요', next: null }
   };
-  var ROOTS = ['i_sub', 'i_permit', 'i_checkup', 'q1', 'q2a', 'q2b', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10'];
+  var ROOTS = ['q1', 'q2a', 'q2b', 'q3', 'q4', 'q5', 'q6', 'q7', 'q8', 'q9', 'q10', 'i_sub', 'i_permit', 'i_checkup', 'q_dates'];
   var ITEM_TITLE = {
-    info: '작업 정보', q1: '안전보건 방침', q2a: '안전 인력', q2b: '안전 예산', q3: '근로자 의견', q4: '위험작업 관리',
-    q5: '개인보호구', q6: '안전점검', q7: '안전교육', q8: '연락체계', q9: '비상대책', q10: '산업재해'
+    info: '작업', q1: '안전 약속', q2a: '안전 담당자', q2b: '안전에 쓰는 돈', q3: '근로자 의견', q4: '위험한 일',
+    q5: '안전모·안전화', q6: '점검', q7: '안전교육', q8: '연락', q9: '사고 대비', q10: '사고 기록', dates: '날짜'
   };
 
   /* 답변을 따라가며 경로(물어본 질문 목록)와 결과를 계산 */
-  function walk(answers) {
+  function walk(answers, acc) {
     var path = [], results = {}, pending = null;
     for (var r = 0; r < ROOTS.length; r++) {
       var id = ROOTS[r];
@@ -62,11 +64,12 @@
         var q = Q[id];
         path.push(id);
         var a = answers[id];
+        if (!a) { pending = pending || id; id = null; break; }
         if (q.type === 'count') {
-          if (!a) { pending = pending || id; id = null; break; }
+          if (q.deadScore && acc && acc.dead > 0) { results[q.item] = q.deadScore; id = null; break; }
           id = q.next; continue;
         }
-        if (!a) { pending = pending || id; id = null; break; }
+        if (q.type === 'dates') { id = null; break; }
         var nx = q[a];
         if (typeof nx === 'string') { id = nx; continue; }
         if (nx && nx.score != null) results[q.item] = nx.score;
@@ -79,7 +82,7 @@
   }
 
   function evalSummary(c) {
-    var w = walk(c.answers || {});
+    var w = walk(c.answers || {}, c.accident);
     var res = w.results, sub = 0, done = true, items = TPL.FIXED.evalItems;
     items.forEach(function (it) {
       if (it.key === 'q10') return;

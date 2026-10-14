@@ -32,7 +32,7 @@
     all: function () {
       return tx('readonly', function (st) { return st ? st.getAll() : null; }).then(function (r) {
         if (!r) r = Object.keys(memory).map(function (k) { return memory[k]; });
-        return r.sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+        return r.filter(function (c) { return String(c.id).indexOf('__') !== 0; }).sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
       });
     },
     get: function (id) { return tx('readonly', function (st) { return st ? st.get(id) : null; }).then(function (r) { return r || memory[id] || null; }); },

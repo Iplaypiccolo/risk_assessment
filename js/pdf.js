@@ -8,7 +8,7 @@
   function cl(s) { return L.clean(s); }
 
   function build(c, assets) {
-    var info = c.info || {}, E = c.edit, A = c.answers || {};
+    var info = c.info || {}, E = (assets && assets.edit) || c.edit || TPL.DEFAULT_EDIT, A = c.answers || {};
     var Y = D.year(info.writeDate);
     var y = function (s) { return cl(String(s == null ? '' : s).replace(/\{Y\}/g, Y)); };
     var company = cl(info.company), contract = cl(info.contract), ceo = cl(info.ceo);
@@ -18,7 +18,12 @@
     var workerCount = info.workerCount ? String(info.workerCount) : (workers.length ? workers.length + '명' : '');
     if (info.workerCount && /^\d+$/.test(String(info.workerCount))) workerCount = info.workerCount + '명';
     var ev = L.evalSummary(c);
-    var sch = c.schedule || {};
+    var sch = Object.assign({}, c.schedule || {});
+    if (A.q_dates === 'O' || !A.q_dates) ['patrolDate', 'preEduDate', 'interviewDate', 'postEduDate'].forEach(function (k) { if (A.q_dates === 'O' || !sch[k]) sch[k] = info.writeDate; });
+    var defPlace = (info.branch ? String(info.branch).replace(/지사$/, '') + '지사 회의실, ' : '') + (info.company ? info.company + ' 사무실' : '');
+    if (!sch.preEduPlace) sch.preEduPlace = defPlace;
+    if (!sch.postEduPlace) sch.postEduPlace = defPlace;
+    var budgetRows = (c.budget && c.budget.length) ? c.budget : budgetRows;
     var photos = c.photos || {};
     var ceoTxt = ceo ? '사장 ' + ceo : '사장';
     var content = [];
@@ -240,7 +245,7 @@
     content.push(titleBox('재해사례, 재해통계\n정보 조사', '#F47A20', 'white'));
     var acc = c.accident || {};
     var hadAcc = A.q10b === 'O';
-    var accCases = hadAcc ? (acc.cases || 0) : 0, accDead = hadAcc && A.q10c === 'O' ? (acc.dead || 0) : 0, accInj = hadAcc ? (acc.injured || 0) : 0;
+    var accCases = hadAcc ? (acc.cases || 0) : 0, accDead = hadAcc ? (acc.dead || 0) : 0, accInj = hadAcc ? (acc.injured || 0) : 0;
     content.push({ text: '□ 공종명 : ' + cl(E.work), fontSize: 9, margin: [0, 6, 0, 10] });
     content.push({ text: '□ 재해통계(' + (Y - 4) + '년~' + (Y - 1) + ')', fontSize: 9, margin: [0, 0, 0, 6] });
     content.push({ table: { widths: ['*', '*', '*', '*'], body: [
@@ -353,7 +358,7 @@
     ];
     content.push({ table: { widths: [130, '*'], body: ivRows }, layout: thin });
     (E.interviews || []).forEach(function (iv, i) {
-      var wn = workers[iv.worker] ? cl(workers[iv.worker].name) : (wNames[0] || '');
+      var wn = workers.length ? cl(workers[i % workers.length].name) : '';
       var ivb = [];
       ivb.push([{ text: '경험담 ' + (i + 1) + '   성 명 : ' + wn + '  (인)', bold: true, fontSize: 8.5, fillColor: LGRAY }]);
       ivb.push([{ stack: [
@@ -421,16 +426,16 @@
     content.push(h1('안전 예산 현황'));
     content.push({ text: 'ㅇ 안전예산 편성 현황 (단위 : 천원)', fontSize: 10, margin: [0, 0, 0, 10] });
     var bsum = 0, anyAmt = false;
-    (E.budget || []).forEach(function (b) {
+    budgetRows.forEach(function (b) {
       if (/^\s*-/.test(b.item)) { var n = String(b.amount || '').replace(/[^\d]/g, ''); if (n) { bsum += +n; anyAmt = true; } }
     });
     // 하위항목(-로 시작) 합계가 없으면 상위항목 금액 합계 사용
-    if (!anyAmt) (E.budget || []).forEach(function (b) { var n = String(b.amount || '').replace(/[^\d]/g, ''); if (n) { bsum += +n; anyAmt = true; } });
+    if (!anyAmt) budgetRows.forEach(function (b) { var n = String(b.amount || '').replace(/[^\d]/g, ''); if (n) { bsum += +n; anyAmt = true; } });
     content.push({ _big: true, table: { headerRows: 2, widths: ['*', 150], body: [
       [{ text: '구 분', rowSpan: 2, alignment: 'center', fillColor: BLUE, bold: true, fontSize: 9, margin: [0, 6, 0, 0] }, { text: String(Y), alignment: 'center', fillColor: BLUE, bold: true, fontSize: 9 }],
       [{}, { text: '예산', alignment: 'center', fillColor: BLUE, bold: true, fontSize: 9 }],
       [{ text: '계', alignment: 'center', fontSize: 9 }, { text: anyAmt ? bsum.toLocaleString('ko-KR') : '', alignment: 'center', fontSize: 9 }]
-    ].concat((E.budget || []).map(function (b) { return [{ text: cl(b.item), fontSize: 8.5 }, { text: L.fmtMoney(b.amount), alignment: 'center', fontSize: 8.5 }]; })) }, layout: thin });
+    ].concat(budgetRows.map(function (b) { return [{ text: cl(b.item), fontSize: 8.5 }, { text: L.fmtMoney(b.amount), alignment: 'center', fontSize: 8.5 }]; })) }, layout: thin });
 
     /* 39쪽 위험작업 관리계획 */
     pageBreak();

@@ -615,15 +615,20 @@
       'main{max-width:720px;margin:0 auto;padding:16px}' +
       '.head{background:#1f5f8f;color:#fff;border-radius:18px;padding:20px}.head h1{margin:0 0 6px;font-size:24px}.head p{margin:0;opacity:.92}' +
       '.how{background:#fff4d6;color:#5c3d00;border-radius:14px;padding:14px 16px;margin:14px 0}' +
-      '.how a{display:block;margin-top:10px;background:#1f5f8f;color:#fff;text-align:center;text-decoration:none;font-weight:700;border-radius:14px;padding:14px}' +
+      '.how button{display:block;width:100%;margin:12px 0 4px;background:#1f5f8f;color:#fff;border:0;font:inherit;font-size:20px;font-weight:700;border-radius:14px;padding:16px;cursor:pointer}.how button:hover{background:#164a70}.how small{display:block;margin-top:8px;font-size:15px}#msg{margin:6px 0 0;font-weight:700}' +
       '.c{background:#fff;border:1px solid #d6e1e9;border-radius:18px;padding:18px;margin:0 0 14px}.c h2{margin:0 0 10px;font-size:22px}' +
       'table{width:100%;border-collapse:collapse}th{text-align:left;color:#4e6274;font-weight:600;width:90px;vertical-align:top;padding:6px 8px 6px 0}td{padding:6px 0;border-bottom:1px solid #eef3f7}' +
       '.ph{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.ph img{width:100%;border-radius:10px;display:block}' +
       '</style></head><body><main>' +
       '<div class="head"><h1>위험성평가 저장 파일</h1><p>' + esc(D.dot(D.today())) + ' 저장 · 업체 ' + payload.companies.length + '곳</p></div>' +
-      '<div class="how"><b>이 파일로 이어서 작성하려면</b><br>아래 버튼으로 사이트를 연 뒤, 첫 화면 맨 아래 「파일로 저장 · 다른 기기로 옮기기」 → 「불러오기」를 누르고 이 파일을 고르세요.' +
-      '<a href="' + esc(site) + '">위험성평가 보고서 만들기 열기</a></div>' + cards +
-      '</main><script type="application/json" id="ra-backup">' + json + '<\/script></body></html>';
+      '<div class="how"><b>이어서 작성하려면</b> 아래 파란 버튼을 누르세요. 사이트가 열리면서 이 내용이 그대로 들어갑니다.' +
+      '<button id="go" type="button">이 내용으로 이어서 작성하기 ▶</button><p id="msg"></p>' +
+      '<small>버튼이 안 되면(아이폰 파일 미리보기 등): 사이트 첫 화면 맨 아래 「파일로 저장 · 다른 기기로 옮기기」 → 「불러오기」에서 이 파일을 고르세요.</small></div>' + cards +
+      '</main><script type="application/json" id="ra-backup">' + json + '<\/script>' +
+      '<script>(function(){var SITE=' + JSON.stringify(site) + ',btn=document.getElementById("go"),msg=document.getElementById("msg"),w=null,sent=false;' +
+      'window.addEventListener("message",function(e){if(e.data==="ra-ready"&&w&&!sent){sent=true;w.postMessage({type:"ra-backup",payload:document.getElementById("ra-backup").textContent},"*");}' +
+      'if(e.data==="ra-done"){msg.textContent="사이트로 옮겼습니다. 열린 화면에서 이어서 작성하세요.";}});' +
+      'btn.onclick=function(){sent=false;msg.textContent="사이트를 여는 중…";w=window.open(SITE+"#from-file","_blank");if(!w){location.href=SITE;}};})();<\/script></body></html>';
   }
   function exportAll() {
     Store.all().then(function (list) {
@@ -647,16 +652,42 @@
     if (!el) throw new Error('형식 오류');
     return JSON.parse(el.textContent);
   }
+  function importData(d, quiet) {
+    if (!d || !d.companies) return Promise.reject(new Error('형식 오류'));
+    var jobs = d.companies.map(function (c) { return Store.put(migrate(c)); });
+    var untouched = JSON.stringify(SET && SET.edit) === JSON.stringify(migrateSet(null).edit);
+    if (d.settings && quiet) { if (untouched) { SET = migrateSet(d.settings); jobs.push(Store.put(SET)); } }
+    else if (d.settings && confirm('보고서 기본 내용 설정도 함께 불러올까요?\n(위험요인·점검 항목 등. 잘 모르시면 「확인」)')) { SET = migrateSet(d.settings); jobs.push(Store.put(SET)); }
+    return Promise.all(jobs).then(function () { return d.companies.length; });
+  }
+  /* 저장 파일(HTML)의 「이어서 작성하기」 버튼으로 열렸을 때: 파일이 보내 주는 내용을 받아 바로 엽니다 */
+  function receiveFromFile() {
+    if (location.hash !== '#from-file' || !window.opener) return false;
+    var got = false;
+    window.addEventListener('message', function (e) {
+      var m = e.data;
+      if (got || !m || m.type !== 'ra-backup' || typeof m.payload !== 'string') return;
+      got = true;
+      var d; try { d = JSON.parse(m.payload); } catch (err) { alert('저장 파일을 읽지 못했습니다.'); return; }
+      if (!d || d.app !== 'risk_assessment' || !d.companies || !d.companies.length) { alert('저장 파일을 읽지 못했습니다.'); return; }
+      var names = d.companies.map(function (c) { return (c.info && c.info.company) || '업체명 미입력'; }).join(', ');
+      if (!confirm('저장 파일의 내용을 불러올까요?\n\n' + names)) return;
+      importData(d, true).then(function () {
+        try { e.source.postMessage('ra-done', '*'); } catch (err) { /* 무시 */ }
+        history.replaceState(null, '', location.pathname + location.search);
+        if (d.companies.length === 1) { openCompany(d.companies[0].id); toast('저장했던 내용을 불러왔습니다.'); }
+        else { multi = true; Settings.set('multi', true); view = 'home'; render(); toast(d.companies.length + '개 업체를 불러왔습니다.'); }
+      });
+    });
+    try { window.opener.postMessage('ra-ready', '*'); } catch (err) { return false; }
+    return true;
+  }
   function importFile() {
     var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.html,.htm,.json,text/html,application/json';
     inp.onchange = function () {
       var f = inp.files[0]; if (!f) return;
-      f.text().then(function (t) {
-        var d = readBackup(t); if (!d || !d.companies) throw new Error('형식 오류');
-        var jobs = d.companies.map(function (c) { return Store.put(migrate(c)); });
-        if (d.settings && confirm('보고서 기본 내용 설정도 함께 불러올까요?')) { SET = migrateSet(d.settings); jobs.push(Store.put(SET)); }
-        return Promise.all(jobs).then(function () { return d.companies.length; });
-      }).then(function (n) { toast(n + '개 업체를 불러왔습니다.'); renderHome(); }).catch(function () { alert('불러올 수 없는 파일입니다.'); });
+      f.text().then(function (t) { return importData(readBackup(t)); })
+        .then(function (n) { toast(n + '개 업체를 불러왔습니다.'); renderHome(); }).catch(function () { alert('불러올 수 없는 파일입니다.'); });
     };
     inp.click();
   }
@@ -814,5 +845,5 @@
   })();
 
   /* 시작: 보고서 기본 내용 설정 불러오기 */
-  Store.get('__settings__').then(function (s) { SET = migrateSet(s); if (!s) Store.put(SET); render(); }).catch(function () { SET = migrateSet(null); render(); });
+  Store.get('__settings__').then(function (s) { SET = migrateSet(s); if (!s) Store.put(SET); render(); receiveFromFile(); }).catch(function () { SET = migrateSet(null); render(); receiveFromFile(); });
 })();

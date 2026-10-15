@@ -238,7 +238,7 @@
     });
     h += '<button class="btn btn-ghost btn-big" data-act="addWorker">＋ 근로자 추가</button>';
     h += '<div class="card"><div class="card-head"><b>근로자 중에 해당하는 분이 있나요?</b></div><p class="hint">해당하면 눌러서 ■ 표시하세요.</p><div class="chips big">' +
-      T.FIXED.traits.map(function (t) { var on = !!cur.traits[t[0]]; return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-act="trait" data-k="' + t[0] + '">' + (on ? '■ ' : '□ ') + t[1] + (t[0] === 'senior' ? ' (70세 이상)' : '') + '</button>'; }).join('') + '</div></div>';
+      T.FIXED.traits.map(function (t) { var on = !!cur.traits[t[0]]; return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-act="trait" data-k="' + t[0] + '">' + (on ? '■ ' : '□ ') + t[1] + (t[0] === 'senior' ? ' (55세 이상)' : '') + '</button>'; }).join('') + '</div></div>';
     return h;
   }
 

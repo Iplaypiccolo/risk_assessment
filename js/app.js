@@ -32,7 +32,7 @@
     { k: 'post2', label: '결과 교육 사진 ②', aspect: 4 / 3 },
     { k: 'edu', label: '채용교육 등 교육사진', aspect: 1.6 }
   ];
-  var RELS = [['母', '어머니'], ['父', '아버지'], ['妻', '아내'], ['夫', '남편'], ['子', '아들'], ['女', '딸'], ['兄', '형·오빠'], ['弟', '동생']];
+  var RELS = [['母', '어머니'], ['父', '아버지'], ['妻', '아내'], ['夫', '남편'], ['子', '아들'], ['女', '딸'], ['兄', '형·오빠'], ['姉', '누나·언니'], ['弟', '동생'], ['妹', '여동생'], ['孫', '손주']];
   var AGENCIES = [['fire', '119 안전센터', '예) 강릉 119안전센터'], ['hospital', '병원', '예) 강릉○○병원'], ['police', '경찰서', '예) 강릉경찰서'], ['patrol', '고속도로 순찰대', '예) 고속도로순찰대 제○지구대']];
 
   /* ---------- 공통 도우미 ---------- */
@@ -310,7 +310,7 @@
     var h = '<p class="lead">사고가 났을 때 연락할 곳입니다.</p><h3 class="sec">가족 비상연락처</h3>';
     cur.emergency.forEach(function (e, i) {
       h += '<div class="card"><div class="card-head"><b>비상연락처 ' + (i + 1) + '</b></div>' +
-        field('관계', 'emergency.' + i + '.rel', { chips: RELS.map(function (r) { return [r[0], r[1]]; }), noInput: 1 }) +
+        relSelect(i) +
         field('이름', 'emergency.' + i + '.name') + field('휴대폰', 'emergency.' + i + '.phone', { type: 'tel', ph: '010-0000-0000' }) + '</div>';
     });
     h += '<h3 class="sec">가까운 긴급 구호기관</h3>';
@@ -335,6 +335,15 @@
       h += field('이름', 'agencies.' + k + '.name', { ph: a[2] }) + field('전화번호', 'agencies.' + k + '.phone', { type: 'tel', ph: '000-000-0000' }) + '</div>';
     });
     return h;
+  }
+  function relSelect(i) {
+    var v = cur.emergency[i].rel || '';
+    var known = RELS.some(function (r) { return r[0] === v; });
+    return '<label class="field"><span class="lab">관계</span><select class="sel" data-bind="emergency.' + i + '.rel">' +
+      '<option value=""' + (v ? '' : ' selected') + '>골라 주세요</option>' +
+      RELS.map(function (r) { return '<option value="' + r[0] + '"' + (v === r[0] ? ' selected' : '') + '>' + r[1] + ' (' + r[0] + ')</option>'; }).join('') +
+      (v && !known ? '<option value="' + esc(v) + '" selected>' + esc(v) + '</option>' : '') +
+      '</select></label>';
   }
   function nearFind() {
     if (!cur.info.branch && !cur.info.address) { alert('「기본 정보」에서 일하는 지사 이름이나 사업장 주소를 먼저 적어 주세요.'); return; }
@@ -812,6 +821,7 @@
     var t = e.target;
     if (t.dataset && t.dataset.kind === 'tel') { var f = fmtPhone(t.value); if (f !== t.value) { t.value = f; setP(cur, t.dataset.bind, f); save(); } }
     if (t.dataset && t.dataset.bind && t.type === 'date') { setP(cur, t.dataset.bind, t.value); save(); }
+    if (t.dataset && t.dataset.bind && t.tagName === 'SELECT') { setP(cur, t.dataset.bind, t.value); save(); }
     if (t.dataset && t.dataset.photo) {
       var file = t.files && t.files[0], k = t.dataset.photo; t.value = '';
       if (!file) return;

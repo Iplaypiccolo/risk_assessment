@@ -208,7 +208,7 @@
       h += '<div class="home-tools">' +
         '<button class="btn btn-ghost btn-big" data-act="settings">⚙ 보고서 기본 내용 바꾸기</button>' +
         '<p class="note">위험요인, 점검 항목, 보호구 등 보고서에 미리 들어 있는 내용을 고칩니다. 모든 업체에 똑같이 적용됩니다. 고칠 것이 없으면 누르지 않아도 됩니다.</p>' +
-        '<details class="more"><summary>파일로 저장 · 다른 기기로 옮기기</summary><p class="note">「파일로 저장」을 누르면 저장 파일(.json)이 「다운로드」 폴더에 생깁니다. 다른 기기에서 이 사이트를 열고 「불러오기」로 그 파일을 고르면 그대로 이어서 쓸 수 있습니다. (저장 파일은 직접 열어 보는 파일이 아니라 「불러오기」 전용입니다)</p><div class="row2"><button class="btn btn-ghost" data-act="export">파일로 저장</button><button class="btn btn-ghost" data-act="import">불러오기</button></div></details></div>';
+        '<details class="more"><summary>기본 내용 설정 저장 · 불러오기</summary><p class="note">「보고서 기본 내용 바꾸기」에서 고친 설정만 파일(.json)로 저장하고 불러옵니다. 업체가 작성한 내용은 들어가지 않습니다. 이 파일을 다른 분께 보내 「불러오기」 하면 같은 설정으로 보고서를 만들 수 있습니다.</p><div class="row2"><button class="btn btn-ghost" data-act="export">설정 저장</button><button class="btn btn-ghost" data-act="import">설정 불러오기</button></div></details></div>';
       $app.innerHTML = h;
     });
   }
@@ -936,65 +936,39 @@
     m.hidden = false; document.body.classList.add('noscroll');
   }
 
-  /* ---------- 파일로 저장 / 불러오기 ---------- */
+  /* ---------- 설정 파일로 저장 / 불러오기 (보고서 기본 내용 설정만. 업체 작성 내용은 들어가지 않음) ---------- */
   function exportAll() {
-    Store.all().then(function (list) {
-      var data = multi ? list : list.filter(function (c) { return c.id === Settings.get('currentId'); });
-      if (!data.length) data = list.slice(0, 1);
-      if (!data.length) { alert('저장할 내용이 아직 없습니다.'); return; }
-      var payload = { app: 'risk_assessment', v: 2, savedAt: D.today(), companies: data, settings: SET };
-      var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-      var who = data.length === 1 ? (data[0].info.company || '업체') : '업체' + data.length + '곳';
-      var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-      a.download = '위험성평가_저장_' + who.replace(/[\\/:*?"<>|\s]+/g, '_') + '_' + D.today().replace(/-/g, '') + '.json';
-      document.body.appendChild(a); a.click(); a.remove();
-      toast('저장 파일을 받았습니다. 휴대폰의 「다운로드」 폴더에 있어요.');
-    });
+    if (!SET) { alert('저장할 설정이 없습니다.'); return; }
+    var payload = { app: 'risk_assessment', kind: 'settings', v: 3, savedAt: D.today(), settings: { edit: SET.edit, reviewed: SET.reviewed } };
+    var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = '위험성평가_기본내용설정_' + D.today().replace(/-/g, '') + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    toast('설정 파일을 받았습니다. 「다운로드」 폴더에 있어요.');
   }
   function readBackup(text) {
     var t = String(text || '').trim();
     if (t.charAt(0) === '{') return JSON.parse(t);
-    var doc = new DOMParser().parseFromString(t, 'text/html');
+    var doc = new DOMParser().parseFromString(t, 'text/html');   // 예전 HTML 저장 파일
     var el = doc.getElementById('ra-backup');
     if (!el) throw new Error('형식 오류');
     return JSON.parse(el.textContent);
   }
-  function importData(d, quiet) {
-    if (!d || !d.companies) return Promise.reject(new Error('형식 오류'));
-    var jobs = d.companies.map(function (c) { return Store.put(migrate(c)); });
-    var untouched = JSON.stringify(SET && SET.edit) === JSON.stringify(migrateSet(null).edit);
-    if (d.settings && quiet) { if (untouched) { SET = migrateSet(d.settings); jobs.push(Store.put(SET)); } }
-    else if (d.settings && confirm('보고서 기본 내용 설정도 함께 불러올까요?\n(위험요인·점검 항목 등. 잘 모르시면 「확인」)')) { SET = migrateSet(d.settings); jobs.push(Store.put(SET)); }
-    return Promise.all(jobs).then(function () { return d.companies.length; });
+  /* 파일 안의 보고서 기본 내용 설정만 가져옴 (업체 내용은 무시) */
+  function importSettings(d) {
+    if (!d || !d.settings || !d.settings.edit) return Promise.reject(new Error('설정 없음'));
+    if (!confirm('이 기기의 「보고서 기본 내용」 설정을 파일의 설정으로 바꿀까요?\n(업체가 작성한 내용은 바뀌지 않습니다)')) return Promise.resolve(false);
+    SET = migrateSet(clone(d.settings));
+    return Store.put(SET).then(function () { return true; });
   }
-  /* 저장 파일(HTML)의 「이어서 작성하기」 버튼으로 열렸을 때: 파일이 보내 주는 내용을 받아 바로 엽니다 */
-  function receiveFromFile() {
-    if (location.hash !== '#from-file' || !window.opener) return false;
-    var got = false;
-    window.addEventListener('message', function (e) {
-      var m = e.data;
-      if (got || !m || m.type !== 'ra-backup' || typeof m.payload !== 'string') return;
-      got = true;
-      var d; try { d = JSON.parse(m.payload); } catch (err) { alert('저장 파일을 읽지 못했습니다.'); return; }
-      if (!d || d.app !== 'risk_assessment' || !d.companies || !d.companies.length) { alert('저장 파일을 읽지 못했습니다.'); return; }
-      var names = d.companies.map(function (c) { return (c.info && c.info.company) || '업체명 미입력'; }).join(', ');
-      if (!confirm('저장 파일의 내용을 불러올까요?\n\n' + names)) return;
-      importData(d, true).then(function () {
-        try { e.source.postMessage('ra-done', '*'); } catch (err) { /* 무시 */ }
-        history.replaceState(null, '', location.pathname + location.search);
-        if (d.companies.length === 1) { openCompany(d.companies[0].id); toast('저장했던 내용을 불러왔습니다.'); }
-        else { multi = true; Settings.set('multi', true); view = 'home'; render(); toast(d.companies.length + '개 업체를 불러왔습니다.'); }
-      });
-    });
-    try { window.opener.postMessage('ra-ready', '*'); } catch (err) { return false; }
-    return true;
-  }
+  function receiveFromFile() { return false; }
   function importFile() {
     var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,.html,.htm,application/json,text/html,text/plain,application/octet-stream';
     inp.onchange = function () {
       var f = inp.files[0]; if (!f) return;
-      f.text().then(function (t) { return importData(readBackup(t)); })
-        .then(function (n) { toast(n + '개 업체를 불러왔습니다.'); renderHome(); }).catch(function () { alert('불러올 수 없는 파일입니다.'); });
+      f.text().then(function (t) { return importSettings(readBackup(t)); })
+        .then(function (ok) { if (ok) { toast('보고서 기본 내용 설정을 불러왔습니다.'); render(); } })
+        .catch(function () { alert('설정을 불러올 수 없는 파일입니다.'); });
     };
     inp.click();
   }

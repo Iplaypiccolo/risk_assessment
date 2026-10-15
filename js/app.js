@@ -10,7 +10,8 @@
   var openSec = {};
   var multi = Settings.get('multi', Settings.get('admin', false));
   var nearCache = {};      // 구호기관 검색 결과 (업체 id별, 저장 안 함)
-  var nearMode = 'gps';    // 구호기관 찾는 기준: gps(내 위치) | base(지사 근처)
+  var nearMode = 'gps';
+  var setSec = null, setEditing = false, setSnap = null;   // 기본 내용 바꾸기: 보는 항목, 수정 중 여부, 수정 전 내용    // 구호기관 찾는 기준: gps(내 위치) | base(지사 근처)
 
   var STEPS = [
     { key: 'info', title: '기본 정보', short: '기본정보', icon: '<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.6-1.5 1.6-2 2.5-2s1.9.5 2.5 2M14 10h4M14 14h3"/>' },
@@ -79,7 +80,7 @@
   }
   function migrateSet(s) {
     s = s || { id: '__settings__' };
-    s.id = '__settings__'; s.edit = s.edit || {};
+    s.id = '__settings__'; s.edit = s.edit || {}; s.reviewed = s.reviewed || {};
     Object.keys(T.DEFAULT_EDIT).forEach(function (k) { if (s.edit[k] === undefined) s.edit[k] = clone(T.DEFAULT_EDIT[k]); });
     return s;
   }
@@ -124,17 +125,27 @@
       nav.hidden = true; prog.hidden = true; menu.hidden = true;
       renderHome(); return;
     }
+    var bp = document.getElementById('btnPrev'), bn = document.getElementById('btnNext');
     if (view === 'settings') {
-      document.getElementById('topTitle').textContent = '보고서 기본 내용 바꾸기';
-      nav.hidden = true; prog.hidden = true; menu.hidden = true;
+      var sec = setSec && EDIT_SECS.filter(function (x) { return x.id === setSec; })[0];
+      document.getElementById('topTitle').textContent = sec ? sec.title : '보고서 기본 내용 바꾸기';
+      prog.hidden = true; menu.hidden = true;
+      if (!sec) nav.hidden = true;
+      else {
+        nav.hidden = false; bn.hidden = false;
+        if (setEditing) { bp.textContent = '취소'; bp.dataset.act = 'setCancel'; bn.textContent = '수정 완료 ✔'; bn.dataset.act = 'setSave'; }
+        else { bp.textContent = '✎ 수정'; bp.dataset.act = 'setEdit'; bn.textContent = '확인 (수정 없음)'; bn.dataset.act = 'setOk'; }
+      }
       $app.innerHTML = viewSettings(); return;
     }
+    bp.dataset.act = 'prev'; bn.dataset.act = 'next';
     var st = STEPS[stepIdx];
     document.getElementById('topTitle').textContent = (stepIdx + 1) + '. ' + st.title;
     menu.hidden = false; prog.hidden = false; nav.hidden = false;
     document.getElementById('progressBar').style.width = ((stepIdx + 1) / STEPS.length * 100) + '%';
-    document.getElementById('btnPrev').textContent = stepIdx === 0 ? '◀ 처음으로' : '◀ 이전';
-    document.getElementById('btnNext').hidden = stepIdx === STEPS.length - 1;
+    bp.textContent = stepIdx === 0 ? '◀ 처음으로' : '◀ 이전';
+    bn.textContent = '다음 ▶';
+    bn.hidden = stepIdx === STEPS.length - 1;
     var html = '';
     switch (st.key) {
       case 'info': html = viewInfo(); break;
@@ -473,6 +484,40 @@
       return listEditor('edit.emergencyFlow', [{ k: 'step', l: '단계' }, { k: 'text', l: '내용', t: 'area' }], { step: '', text: '▪ ' }, '단계');
     } }
   ];
+  /* 각 항목을 표로 보기 */
+  var TABLES = {
+    process: function () { var e = cur.edit, P = e.process || {}; return kv([['공정명', P.name], ['작업 이름', e.work], ['세부공정명', e.resultSubName], ['공정설명', P.desc], ['설비', P.equip], ['물질', P.material]]); },
+    equip: function () {
+      var e = cur.edit, i = e.info || {}, hv = i.heavy || {}, ck = function (b) { return b ? '■' : '□'; };
+      return '<h4>기계·기구 및 설비</h4>' + tb(['설비명', '수량'], (e.equipment || []).map(function (r) { return [r.name, r.qty]; })) +
+        '<h4>유해화학물질</h4>' + tb(['화학물질명', '취급량(일)', '취급시간'], (e.chemicals || []).map(function (r) { return [r.name, r.amount, r.time]; })) +
+        '<h4>기타 정보</h4>' + kv([['중량물 단위 중량', hv.unit], ['취급형태', '들기' + ck(hv.lift) + ' 밀기' + ck(hv.push) + ' 끌기' + ck(hv.pull) + ' 해당무' + ck(hv.none)],
+          ['작업환경측정', i.envMeasure === 'yes' ? '측정' : i.envMeasure === 'no' ? '미측정' : '해당무']]);
+    },
+    patrol: function () { return tb(['번호', '유해·위험 작업', '사고·질병의 유형'], (cur.edit.patrol || []).map(function (r, i) { return [String(i + 1), r.text, r.type]; })); },
+    cases: function () { return tb(['구분', '연도', '기관명', '사고내용'], (cur.edit.cases || []).map(function (r) { return [r.kind, r.year, r.org, r.text]; })); },
+    msds: function () { return tb(['물질명', 'CAS No.', '사용량', '저장량', '용도'], (cur.edit.msds || []).map(function (r) { return [r.name, r.cas, r.use, r.store, r.purpose]; })); },
+    hazard: function () {
+      var set = {}; (cur.edit.hazardChecks || []).forEach(function (k) { set[k] = 1; });
+      return tb(['분류', '해당 항목 (■ 해당 / □ 해당 없음)'], T.FIXED.hazardGroups.map(function (g) {
+        return [g.no + ' ' + g.name, g.items.map(function (it) { return (set[it[0]] ? '■ ' : '□ ') + it[1]; }).join('\n')];
+      }));
+    },
+    results: function () {
+      return tb(['세부작업', '위험분류', '유해·위험 상황', '현재 안전보건조치', '가능성', '중대성', '위험성'], (cur.edit.results || []).map(function (r) {
+        var v = (+r.p || 0) * (+r.s || 0); return [r.task, r.cls, r.situation, r.measure, String(r.p || ''), String(r.s || ''), v ? v + (v >= 6 ? ' 높음' : v === 4 ? ' 보통' : ' 낮음') : ''];
+      }));
+    },
+    edu: function () { var e = cur.edit; return '<h4>사전 교육 내용</h4>' + ol((e.preEdu || {}).topics) + '<h4>결과 교육 내용</h4>' + ol((e.postEdu || {}).topics); },
+    interviews: function () { return tb(['번호', '대상공종', '근로자 의견', '담당자 의견'], (cur.edit.interviews || []).map(function (r, i) { return [String(i + 1), r.work, r.opinion, r.reply]; })); },
+    budget: function () { return '<p class="hint">금액은 각 업체가 질문에 답할 때 적습니다.</p>' + tb(['안전예산 항목'], (cur.edit.budget || []).map(function (r) { return [r.item]; })); },
+    danger: function () { return tb(['작업내용', '위치', '세부 공종 예시', '해당'], (cur.edit.dangerWork || []).map(function (r) { return [r.work, r.place, r.detail, r.yes ? '√' : '']; })); },
+    ppe: function () { var p = cur.edit.ppe || {}; return '<p class="hint">대상자 칸에는 근로자 명단과 업체 이름이 자동으로 들어갑니다.</p>' + tb(['지급계획', '비고'], (p.rows || []).map(function (r) { return [r.plan, r.note]; })) + '<h4>관리·운영방안</h4>' + ol(p.mgmt); },
+    insp: function () { var e = cur.edit; return tb(['공정', '위험요소', '안전점검사항'], (e.inspection || []).map(function (r) { return [r.proc, r.risk, r.check]; })) + '<h4>점검계획</h4>' + ol(e.inspectionPlan); },
+    eduRec: function () { var e = cur.edit; return tb(['구분', '대상', '기준', '실시'], (e.eduRecord || []).map(function (r) { return [r.kind, r.target, r.std, r.done === 'auto' ? '자동(질문 답)' : r.done]; })) + kv([['사진 내용', e.eduPhotoLabel]]); },
+    emer: function () { return tb(['단계', '내용'], (cur.edit.emergencyFlow || []).map(function (r) { return [r.step, r.text]; })); }
+  };
+  EDIT_SECS.forEach(function (s) { s.table = TABLES[s.id]; });
   function listEditor(path, fields, tmpl, noun) {
     var arr = getP(cur, path) || [], h = '';
     arr.forEach(function (it, i) {
@@ -529,13 +574,35 @@
     }).join('') + '</div></div>';
   }
   function viewSettings() {
-    var h = '<p class="lead">원본 보고서 내용이 이미 들어 있습니다. 바꾼 내용은 <b>모든 업체의 보고서에 똑같이</b> 들어갑니다.</p>';
-    EDIT_SECS.forEach(function (s) {
-      h += '<details class="sec-box" data-sec="' + s.id + '"' + (openSec[s.id] ? ' open' : '') + '><summary>' + s.title + '</summary><div class="sec-body">' +
-        (openSec[s.id] ? s.render() + '<button class="btn btn-ghost btn-reset" data-act="resetSec" data-sec="' + s.id + '">↺ 이 부분을 원본 내용으로 되돌리기</button>' : '') + '</div></details>';
-    });
-    return h + '<button class="btn btn-primary btn-big" data-act="home">✔ 다 고쳤어요 (처음 화면으로)</button>';
+    var rv = cur.reviewed || {};
+    if (!setSec) {
+      var h = '<p class="lead">항목을 누르면 보고서에 들어갈 내용이 표로 나옵니다. 바꾼 내용은 <b>모든 업체의 보고서에 똑같이</b> 들어갑니다.</p><div class="set-list">';
+      EDIT_SECS.forEach(function (s, i) {
+        var st = rv[s.id];
+        h += '<button class="set-item" data-act="setOpen" data-sec="' + s.id + '"><span class="set-no">' + (i + 1) + '</span><span class="set-t">' + esc(s.title) + '</span>' +
+          '<span class="set-st ' + (st || 'none') + '">' + (st === 'ok' ? '✔ 확인' : st === 'edited' ? '✎ 수정함' : '확인 전') + '</span></button>';
+      });
+      return h + '</div><button class="btn btn-primary btn-big" data-act="home">처음 화면으로</button>';
+    }
+    var sec = EDIT_SECS.filter(function (x) { return x.id === setSec; })[0];
+    if (!setEditing) {
+      return '<button class="btn btn-sm btn-ghost set-back" data-act="setBack">◀ 항목 목록</button>' +
+        '<p class="lead">아래 내용이 보고서에 들어갑니다.<br>고칠 것이 없으면 <b>「확인」</b>, 고치려면 <b>「수정」</b>을 누르세요.</p>' +
+        '<div class="vt">' + sec.table() + '</div>';
+    }
+    return '<p class="lead">고친 뒤 아래 <b>「수정 완료」</b>를 누르세요. 「취소」를 누르면 고치기 전으로 돌아갑니다.</p>' + sec.render() +
+      '<button class="btn btn-ghost btn-reset" data-act="resetSec" data-sec="' + sec.id + '">↺ 이 부분을 원본 내용으로 되돌리기</button>';
   }
+  /* 설정 항목 보기용 표 */
+  function nl(s) { return esc(s == null ? '' : s).replace(/\n/g, '<br>'); }
+  function tb(head, rows) {
+    if (!rows.length) return '<p class="note">내용이 없습니다.</p>';
+    var wide = head.length >= 4;
+    return (wide ? '<p class="hint">↔ 표가 넓으면 옆으로 밀어서 보세요.</p>' : '') + '<div class="vt-wrap"><table class="vtab' + (wide ? ' wide' : '') + '" style="--cols:' + head.length + '"><thead><tr>' + head.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + nl(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
+  }
+  function kv(rows) { return '<div class="vt-wrap"><table class="vtab kv"><tbody>' + rows.map(function (r) { return '<tr><th>' + esc(r[0]) + '</th><td>' + nl(r[1]) + '</td></tr>'; }).join('') + '</tbody></table></div>'; }
+  function ol(list) { return list && list.length ? '<ol class="vlist">' + list.map(function (t) { return '<li>' + nl(String(t).replace(/\{Y\}/g, '(연도)')) + '</li>'; }).join('') + '</ol>' : '<p class="note">내용이 없습니다.</p>'; }
 
   /* ---------- PDF ---------- */
   var fontCache = null, pdfLibP = null, flowCache = null;
@@ -727,11 +794,25 @@
     var act = b.dataset.act;
     switch (act) {
       case 'setMulti': multi = b.dataset.v === '1'; Settings.set('multi', multi); renderHome(); break;
-      case 'home': goHome(); break;
+      case 'home': if (view === 'settings' && setEditing && setSnap) { Object.keys(setSnap).forEach(function (p) { cur.edit[p] = setSnap[p]; }); setSnap = null; setEditing = false; save(true); } setSec = null; goHome(); break;
       case 'menu': stepMenu(); break;
       case 'closeModal': closeModal(); break;
       case 'goto': closeModal(); goStep(+b.dataset.i); break;
-      case 'settings': cur = SET; view = 'settings'; render(); window.scrollTo(0, 0); break;
+      case 'settings': cur = SET; view = 'settings'; setSec = null; setEditing = false; render(); window.scrollTo(0, 0); break;
+      case 'setOpen': setSec = b.dataset.sec; setEditing = false; render(); window.scrollTo(0, 0); break;
+      case 'setBack': setSec = null; setEditing = false; render(); window.scrollTo(0, 0); break;
+      case 'setOk': cur.reviewed = cur.reviewed || {}; if (cur.reviewed[setSec] !== 'edited') cur.reviewed[setSec] = 'ok'; save(true); setSec = null; render(); window.scrollTo(0, 0); toast('확인했습니다.'); break;
+      case 'setEdit': {
+        var sc = EDIT_SECS.filter(function (x) { return x.id === setSec; })[0];
+        setSnap = {}; sc.paths.forEach(function (p) { setSnap[p] = clone(cur.edit[p]); });
+        setEditing = true; render(); window.scrollTo(0, 0); break;
+      }
+      case 'setCancel':
+        if (setSnap) Object.keys(setSnap).forEach(function (p) { cur.edit[p] = setSnap[p]; });
+        setSnap = null; setEditing = false; save(true); render(); window.scrollTo(0, 0); toast('고치기 전으로 돌렸습니다.'); break;
+      case 'setSave':
+        cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited';
+        setSnap = null; setEditing = false; save(true); setSec = null; render(); window.scrollTo(0, 0); toast('수정했습니다.'); break;
       case 'new': cur = newCompany(); Settings.set('currentId', cur.id); save(true); goStep(0); break;
       case 'open': openCompany(b.dataset.id); break;
       case 'openWorkers': openCompany(b.dataset.id, 1); break;

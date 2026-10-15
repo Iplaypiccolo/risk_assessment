@@ -309,3 +309,27 @@ select.sel:focus { outline: none; border-color: var(--accent); background-color:
 .mp-me i { width: 18px; height: 18px; border-radius: 50%; background: #2f6fe0; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(47,111,224,.25); }
 .mp-me span { margin-top: 2px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 700; padding: 1px 6px; border-radius: 6px; }
 @media (hover: hover) { .mp-item:hover { border-color: var(--accent); } }
+
+/* ---------- 보고서 기본 내용: 항목 목록 · 표로 보기 ---------- */
+.set-list { display: grid; gap: 8px; margin-bottom: 16px; }
+.set-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--panel); border: 1.5px solid var(--line); border-radius: var(--radius); padding: 14px 14px; min-height: 64px; cursor: pointer; font-size: 18px; font-weight: 600; color: var(--ink); }
+.set-no { flex: none; width: 32px; height: 32px; border-radius: 10px; background: var(--ice); color: var(--accent); display: grid; place-items: center; font-weight: 700; font-size: 16px; }
+.set-t { flex: 1; min-width: 0; }
+.set-st { flex: none; font-size: 14px; font-weight: 700; padding: 3px 10px; border-radius: 8px; }
+.set-st.none { background: var(--frost); color: var(--muted); }
+.set-st.ok { background: var(--go-bg); color: var(--go); }
+.set-st.edited { background: #fde8b0; color: var(--plow-ink); }
+.set-back { margin: 12px 0 4px; }
+.vt h4 { margin: 18px 0 8px; }
+.vt-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 12px; }
+.vtab { width: 100%; border-collapse: collapse; font-size: 16px; line-height: 1.45; }
+.vtab th, .vtab td { border-bottom: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+.vtab thead th { background: var(--frost); font-size: 15px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.vtab tbody tr:last-child td, .vtab tbody tr:last-child th { border-bottom: 0; }
+.vtab.kv th { width: 34%; background: var(--frost); font-weight: 700; color: var(--muted); font-size: 15px; }
+.vtab td + td { border-left: 1px solid var(--line); }
+.vlist { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin: 0 0 12px; padding: 12px 14px 12px 36px; font-size: 16px; }
+.vlist li { margin: 4px 0; }
+@media (hover: hover) { .set-item:hover { border-color: var(--accent); background: var(--ice); } }
+.vtab.wide { min-width: calc(var(--cols) * 120px); }
+.vtab.wide td { min-width: 90px; }

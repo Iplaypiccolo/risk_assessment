@@ -10,6 +10,7 @@
   var openSec = {};
   var multi = Settings.get('multi', Settings.get('admin', false));
   var nearCache = {};      // 구호기관 검색 결과 (업체 id별, 저장 안 함)
+  var nearMode = 'gps';    // 구호기관 찾는 기준: gps(내 위치) | base(지사 근처)
 
   var STEPS = [
     { key: 'info', title: '기본 정보', short: '기본정보', icon: '<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.6-1.5 1.6-2 2.5-2s1.9.5 2.5 2M14 10h4M14 14h3"/>' },
@@ -316,15 +317,17 @@
     h += '<h3 class="sec">가까운 긴급 구호기관</h3>';
     var nr = nearCache[cur.id];
     if (Near.hasKey()) {
-      h += '<p class="hint">' + (cur.info.branch ? '「' + esc(String(cur.info.branch).replace(/지사$/, '')) + '지사」' : '사업장 주소') + ' 근처에서 찾습니다.</p>' +
-        '<button class="btn btn-primary btn-big" data-act="nearFind">📍 가까운 곳 자동으로 찾기</button>';
+      h += '<p class="hint">어디를 기준으로 찾을까요?</p>' +
+        '<div class="seg" role="group" aria-label="기준 위치"><button data-act="nearMode" data-v="gps" aria-pressed="' + (nearMode === 'gps') + '">📍 내 위치 근처</button><button data-act="nearMode" data-v="base" aria-pressed="' + (nearMode === 'base') + '">🏢 지사 근처</button></div>' +
+        '<button class="btn btn-primary btn-big" data-act="nearFind">가장 가까운 곳으로 한 번에 채우기</button>' +
+        '<p class="hint">하나씩 직접 고르려면 아래 칸마다 있는 「🗺 지도에서 고르기」를 누르세요.</p>';
       if (nr && nr.base) h += '<p class="hint">기준 위치: ' + esc(nr.base.name) + '</p>';
     } else {
       h += '<p class="hint">「카카오맵에서 찾기」를 누르면 가까운 곳과 전화번호가 나옵니다. 보고 아래 칸에 적어 주세요.</p>';
     }
     AGENCIES.forEach(function (a) {
       var k = a[0], list = nr && nr[k];
-      h += '<div class="card"><div class="card-head"><b>' + a[1] + '</b>' + (!Near.hasKey() ? '<a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="' + esc(Near.mapLink(k, cur.info.branch, cur.info.address)) + '">카카오맵에서 찾기</a>' : '') + '</div>';
+      h += '<div class="card"><div class="card-head"><b>' + a[1] + '</b>' + (Near.hasKey() ? '<button class="btn btn-sm btn-ghost" data-act="nearMap" data-k="' + k + '">🗺 지도에서 고르기</button>' : '<a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="' + esc(Near.mapLink(k, cur.info.branch, cur.info.address)) + '">카카오맵에서 찾기</a>') + '</div>';
       if (list) {
         if (!list.length) h += '<p class="hint">근처에서 찾지 못했어요. 직접 적어 주세요.</p>';
         else h += '<div class="pick-list">' + list.map(function (p, i) {
@@ -345,10 +348,11 @@
       (v && !known ? '<option value="' + esc(v) + '" selected>' + esc(v) + '</option>' : '') +
       '</select></label>';
   }
-  function nearFind() {
-    if (!cur.info.branch && !cur.info.address) { alert('「기본 정보」에서 일하는 지사 이름이나 사업장 주소를 먼저 적어 주세요.'); return; }
-    busy(true, '가까운 곳을 찾는 중…');
-    Near.find(cur.info.branch, cur.info.address).then(function (r) {
+  function nearFind(mode) {
+    mode = mode || nearMode;
+    if (mode === 'base' && !cur.info.branch && !cur.info.address) { alert('「기본 정보」에서 일하는 지사 이름이나 사업장 주소를 먼저 적어 주세요.'); return; }
+    busy(true, mode === 'gps' ? '내 위치를 확인하는 중…<br><small>위치 사용을 허락해 주세요</small>' : '가까운 곳을 찾는 중…');
+    Near.find(mode, cur.info.branch, cur.info.address).then(function (r) {
       busy(false); nearCache[cur.id] = r;
       AGENCIES.forEach(function (a) {
         var k = a[0], first = r[k] && r[k][0];
@@ -357,7 +361,15 @@
       save(); rerender(); toast('가장 가까운 곳을 넣었습니다. 다른 곳을 누르면 바뀝니다.');
     }).catch(function (e) {
       busy(false);
-      alert(e && e.message === 'NO_BASE' ? '지사나 주소 위치를 찾지 못했어요. 「기본 정보」의 지사 이름이나 주소를 확인해 주세요.' : '검색하지 못했어요. 인터넷 연결을 확인하거나 직접 적어 주세요.');
+      var m = e && e.message;
+      if ((m === 'GPS_DENIED' || m === 'NO_GPS') && (cur.info.branch || cur.info.address)) {
+        if (confirm((m === 'GPS_DENIED' ? '위치 사용이 허락되지 않았어요.' : '내 위치를 알 수 없어요.') + '\n대신 「지사 근처」로 찾을까요?')) { nearMode = 'base'; nearFind('base'); }
+        return;
+      }
+      alert(m === 'GPS_DENIED' ? '위치 사용이 허락되지 않았어요. 휴대폰 설정에서 위치를 켜거나, 「지사 근처」를 골라 주세요.'
+        : m === 'NO_BASE' ? '지사나 주소 위치를 찾지 못했어요. 「기본 정보」의 지사 이름이나 주소를 확인해 주세요.'
+        : m === 'NO_GPS' ? '내 위치를 알 수 없어요. 「지사 근처」를 골라 주세요.'
+        : '검색하지 못했어요. 인터넷 연결을 확인하거나 직접 적어 주세요.');
     });
   }
 
@@ -769,6 +781,16 @@
       }
       case 'cnt': { var k = b.dataset.k; cur.accident[k] = Math.max(0, (cur.accident[k] || 0) + (+b.dataset.d)); save(); rerender(); break; }
       case 'nearFind': nearFind(); break;
+      case 'nearMode': nearMode = b.dataset.v; rerender(); break;
+      case 'nearMap': {
+        var mk = b.dataset.k;
+        Near.pick(mk, { mode: nearMode, branch: cur.info.branch, address: cur.info.address }).then(function (r) {
+          if (!r) return;
+          cur.agencies[mk] = { name: r.name, phone: r.phone }; save(); rerender();
+          toast(r.phone ? '「' + r.name + '」을(를) 넣었습니다.' : '「' + r.name + '」을(를) 넣었습니다. 전화번호를 적어 주세요.');
+        });
+        break;
+      }
       case 'nearPick': {
         var nk = b.dataset.k, pl = nearCache[cur.id][nk][+b.dataset.i];
         cur.agencies[nk] = { name: pl.name, phone: pl.phone }; save(); rerender(); break;

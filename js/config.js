@@ -1,9 +1,9 @@
 /* 설정
- * 카카오 JavaScript 키는 이 파일에 적지 않습니다.
- * GitHub 저장소 Settings → Secrets and variables → Actions 에 「KAKAO_JS_KEY」로 넣어 두면
- * 배포할 때 자동으로 채워집니다 (.github/workflows/deploy.yml).
- * 키가 없으면 구호기관 자동 찾기 대신 「카카오맵에서 찾기」 버튼이 나옵니다.
+ * kakaoJsKey : 카카오 개발자 사이트 → 내 애플리케이션 → 앱 키의 「JavaScript 키」.
+ *   JavaScript 키는 공개용 키입니다. 카카오에 등록한 사이트 주소(https://iplaypiccolo.github.io)에서만
+ *   작동하므로 여기에 적어 두어도 다른 곳에서 쓸 수 없습니다. (REST API 키·Admin 키는 절대 적지 마세요)
+ *   GitHub Secrets 에 KAKAO_JS_KEY 를 넣으면 배포할 때 그 값으로 바뀝니다(선택).
  */
 window.APP_CONFIG = {
-  kakaoJsKey: ''
+  kakaoJsKey: '2b852848bc1ac5d75e3b87e3c42a199a'
 };

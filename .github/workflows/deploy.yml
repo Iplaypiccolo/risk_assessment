@@ -1,5 +1,5 @@
 # GitHub Pages 배포
-# 카카오 JavaScript 키는 저장소에 두지 않고, GitHub Secrets(KAKAO_JS_KEY)에서 배포할 때만 넣습니다.
+# 카카오 JavaScript 키: js/config.js 에 있는 값을 쓰고, GitHub Secrets(KAKAO_JS_KEY)가 있으면 그 값으로 바꿉니다.
 name: Deploy Pages
 
 on:
@@ -25,15 +25,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 카카오 키 넣기 (Secrets → js/config.js)
+      - name: 카카오 키 (Secrets가 있으면 사용)
         env:
           KAKAO_JS_KEY: ${{ secrets.KAKAO_JS_KEY }}
         run: |
           node -e "
             const fs = require('fs');
             const key = (process.env.KAKAO_JS_KEY || '').trim();
-            fs.writeFileSync('js/config.js', 'window.APP_CONFIG = ' + JSON.stringify({ kakaoJsKey: key }) + ';\n');
-            console.log(key ? '카카오 키 적용됨' : '카카오 키 없음 (카카오맵 링크로 대체)');
+            if (key) { fs.writeFileSync('js/config.js', 'window.APP_CONFIG = ' + JSON.stringify({ kakaoJsKey: key }) + ';\n'); console.log('Secrets 의 카카오 키 사용'); }
+            else console.log('js/config.js 의 카카오 키 그대로 사용');
           "
           rm -rf .github
 

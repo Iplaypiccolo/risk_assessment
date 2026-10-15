@@ -472,3 +472,5 @@ body.wide .app, body.wide .top-inner { max-width: 1180px; }
 .rp.show-ed .row-x { display: block; }
 .rp div.ed:hover::after { content: none; }
 @media (max-width: 640px) { .tbl-bar { font-size: 13px; } }
+.rp.show-ed .ed-row > td:last-child, .rp.show-ed tr > .ed-c:last-child { padding-right: 30px; }
+.rp.show-ed div.ed { padding-right: 30px; }

@@ -792,7 +792,7 @@
     interviews: ['interviews'], budget: ['budget'], danger: ['dangerWork'], ppe: ['ppe'], insp: ['inspection', 'inspectionPlan'],
     eduRec: ['eduRecord', 'eduPhotoLabel'], emer: ['emergencyFlow']
   };
-  var showEd = false;   // 「수정할 곳 보기」 — 터치 화면처럼 마우스를 올릴 수 없을 때 수정 가능한 칸을 모두 표시
+  var showEd = true;    // 「수정할 곳 보기」 — 터치 화면처럼 마우스를 올릴 수 없을 때 수정 가능한 칸을 모두 표시
 
   function viewSettings() {
     var rv = cur.reviewed || {};
@@ -1017,8 +1017,8 @@
       case 'menu': stepMenu(); break;
       case 'closeModal': closeModal(); break;
       case 'goto': closeModal(); goStep(+b.dataset.i); break;
-      case 'settings': cur = SET; view = 'settings'; setSec = null; showEd = false; render(); window.scrollTo(0, 0); break;
-      case 'setOpen': setSec = b.dataset.sec; showEd = false; render(); window.scrollTo(0, 0); break;
+      case 'settings': cur = SET; view = 'settings'; setSec = null; showEd = true; render(); window.scrollTo(0, 0); break;
+      case 'setOpen': setSec = b.dataset.sec; render(); window.scrollTo(0, 0); break;
       case 'setBack': setSec = null; render(); window.scrollTo(0, 0); break;
       case 'setOk': cur.reviewed = cur.reviewed || {}; if (cur.reviewed[setSec] !== 'edited') cur.reviewed[setSec] = 'ok'; save(true); setSec = null; render(); window.scrollTo(0, 0); toast('확인했습니다.'); break;
       case 'edShow': showEd = !showEd; rerender(); if (showEd) toast('테두리 친 칸을 누르면 고칠 수 있어요.'); break;

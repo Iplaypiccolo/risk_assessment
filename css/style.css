@@ -333,3 +333,126 @@ select.sel:focus { outline: none; border-color: var(--accent); background-color:
 @media (hover: hover) { .set-item:hover { border-color: var(--accent); background: var(--ice); } }
 .vtab.wide { min-width: calc(var(--cols) * 120px); }
 .vtab.wide td { min-width: 90px; }
+.home-btns { margin-top: 14px; }
+.home-btns .btn { min-height: 62px; font-size: 20px; }
+.chip.add { border-style: dashed; }
+.chip.add.on { border-style: solid; }
+/* 기본 내용 바꾸기 화면의 아래 버튼은 작게 */
+.bottom.compact { left: 50%; right: auto; transform: translateX(-50%); width: min(520px, calc(100% - 24px)); bottom: calc(12px + env(safe-area-inset-bottom)); border-radius: 16px; padding: 8px; box-shadow: 0 8px 28px rgba(16,36,58,.18); }
+.bottom.compact .btn { min-height: 46px; font-size: 17px; border-radius: 12px; }
+
+/* ===== 보고서 기본 내용 바꾸기: 목차 + 보고서 모양 표 + 수정 창 ===== */
+.toc { margin: 18px 0 8px; }
+.toc-h { display: flex; align-items: center; gap: 10px; font-size: 20px; margin: 0 0 10px; color: var(--ink); }
+.toc-no { flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 18px; }
+.toc-fixed { margin: 0; padding: 12px 14px; background: var(--frost); border: 1px dashed var(--line); border-radius: var(--radius); color: var(--muted); font-size: 16px; }
+.toc .set-list { padding-left: 14px; border-left: 3px solid var(--ice); margin-left: 16px; }
+.toc .set-no { width: auto; min-width: 40px; padding: 0 6px; font-size: 14px; }
+.set-item.auto { cursor: default; background: var(--frost); color: var(--muted); }
+.set-t small { display: block; font-size: 14px; font-weight: 500; color: var(--muted); }
+.rp-crumb { font-size: 15px; color: var(--muted); margin: 6px 0 2px; }
+.rp-crumb b { color: var(--ink); }
+.lead.sm { font-size: 16px; }
+
+.rp { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin: 10px 0 14px; color: #111; font-family: 'Pretendard', sans-serif; }
+.rp-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 8px; }
+.rt { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.45; table-layout: auto; }
+.rt.wide { min-width: 900px; }
+.rt th, .rt td { border: 1px solid #555; padding: 6px 7px; vertical-align: middle; text-align: center; }
+.rt th { background: #f0f0f0; font-weight: 700; }
+.rt th small { display: block; font-weight: 400; font-size: 11px; }
+.rt th.g { background: #e3efd9; }
+.rt th.top { vertical-align: middle; }
+.rt .l { text-align: left; }
+.rt .sm { font-size: 12px; }
+.rt .ttl { background: #fde9d9; font-size: 20px; font-weight: 800; }
+.rt .ttl.green { background: #d8ead0; }
+.rt .ttl2 { font-size: 16px; }
+.rt td.photo { height: 120px; }
+.rt td.stepbox { font-weight: 700; background: #f5f5f5; }
+.rt.hz td { font-size: 12px; padding: 4px 5px; }
+.rt.hz td.ck { font-size: 16px; width: 26px; }
+.rt.res td { font-size: 12px; }
+.note-row { color: #888; font-size: 12px; }
+.rp-h { font-size: 18px; margin: 4px 0 10px; }
+.rp-p { margin: 10px 0 6px; font-size: 15px; }
+.rp-title { margin: 6px auto 14px; width: fit-content; min-width: 220px; padding: 14px 18px; border: 1.5px solid #333; text-align: center; font-weight: 800; font-size: 18px; }
+.rp-title.orange { background: #fde9d9; }
+.rp-paper { border: 1px solid #ccc; padding: 14px; margin-bottom: 14px; font-size: 15px; }
+.rp-paper p { margin: 4px 0; }
+.rp-lt { text-align: center; font-weight: 800; font-size: 17px; margin-bottom: 10px; }
+.rp-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rp-photos > div { border: 1px dashed #aaa; height: 90px; display: grid; place-items: center; }
+.rp-fixed { margin-top: 12px; font-size: 14px; color: #444; }
+.rp-org { display: flex; align-items: center; justify-content: center; gap: 0; padding: 8px 0; }
+.rp-org i { width: 30px; border-top: 1px solid #333; }
+.rp-ob { border: 1px solid #333; font-size: 12px; min-width: 110px; }
+.rp-ob .h1 { background: #f8d7d7; padding: 3px; font-weight: 700; }
+.rp-ob .h2 { background: #d7e6f8; padding: 3px; font-weight: 700; }
+.rp-ob .r { display: flex; justify-content: space-between; gap: 6px; padding: 3px 6px; border-top: 1px solid #333; }
+.rp-ob .r1 { padding: 3px 6px; border-top: 1px solid #333; }
+.rp-add { margin: 2px 0 12px; }
+.ph { color: #9aa3ab; font-style: italic; font-weight: 500; }
+.au { color: #2a72b5; font-size: .92em; font-weight: 600; }
+
+/* 고칠 수 있는 칸: 마우스를 올리면 테두리 + 옅은 색 */
+.rp .ed, .rp .ed-row, .rp .ed-c, .rp [data-act="hz"] { cursor: pointer; position: relative; transition: background-color .12s, box-shadow .12s; }
+@media (hover: hover) {
+  .rp .ed:hover, .rp .ed-c:hover { background: #fff6d6 !important; box-shadow: inset 0 0 0 2.5px var(--plow); }
+  .rp .ed-row:hover > td { background: #fff6d6; box-shadow: inset 0 2.5px 0 var(--plow), inset 0 -2.5px 0 var(--plow); }
+  .rp .ed-row:hover > td:first-child { box-shadow: inset 2.5px 2.5px 0 var(--plow), inset 0 -2.5px 0 var(--plow); }
+  .rp .ed-row:hover > td:last-child { box-shadow: inset -2.5px 2.5px 0 var(--plow), inset 0 -2.5px 0 var(--plow); }
+  .rp div.ed:hover::after, .rp td.ed:hover::after, .rp .ed-c:hover::after, .rp .ed-row:hover > td:last-child::after { content: '✎'; position: absolute; top: 1px; right: 3px; font-size: 12px; color: var(--plow-ink, #8a5a00); font-style: normal; }
+}
+.rp.show-ed .ed, .rp.show-ed .ed-c, .rp.show-ed .ed-row > td { box-shadow: inset 0 0 0 2px var(--plow); background: #fffaea; }
+.rp .ed-row > td { position: relative; }
+.rp div.ed { padding: 2px 4px; margin: 1px -4px; border-radius: 4px; }
+
+.ed-legend { background: var(--panel); border: 1.5px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+.ed-lh { font-weight: 800; font-size: 17px; margin-bottom: 10px; }
+.ed-lh small { font-weight: 500; color: var(--muted); font-size: 14px; }
+.ed-keys { display: flex; flex-wrap: wrap; gap: 6px; }
+.ed-key { border: 1.5px solid var(--plow); background: #fffaea; color: var(--ink); border-radius: 10px; padding: 7px 11px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.ed-key:hover { background: #ffeeb3; }
+.ed-note { font-size: 14px; color: var(--muted); align-self: center; }
+.ed-lg { margin-top: 12px; font-size: 14px; color: var(--muted); }
+.ed-sample { box-shadow: inset 0 0 0 2px var(--plow); padding: 0 4px; border-radius: 3px; color: var(--ink); }
+
+.modal.memo-on { align-items: center; padding: 16px; }
+.memo { background: #fffdf4; width: 100%; max-width: 620px; max-height: 92vh; display: flex; flex-direction: column; border-radius: 16px; border-top: 6px solid var(--plow); box-shadow: 0 20px 50px rgba(16,36,58,.35); overflow: hidden; }
+.memo-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 14px 16px 10px; border-bottom: 1px solid #efe6c8; }
+.memo-head small { display: block; color: var(--muted); font-size: 13px; margin-bottom: 2px; }
+.memo-head b { font-size: 19px; }
+.memo-body { flex: 1; overflow: auto; padding: 12px 16px; }
+.memo-body .field { margin-bottom: 12px; }
+.memo-foot { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #efe6c8; background: #fffaea; }
+.memo-foot .sp { flex: 1; }
+.memo-foot .btn { min-height: 46px; font-size: 17px; padding: 0 18px; }
+
+/* 휴대폰: 글자를 줄여 표 모양 유지 */
+@media (max-width: 640px) {
+  .rp { padding: 8px; }
+  .rt { font-size: 11px; line-height: 1.35; }
+  .rt th, .rt td { padding: 3px 3px; }
+  .rt .ttl { font-size: 14px; }
+  .rt .ttl2, .rp-h, .rp-lt { font-size: 13px; }
+  .rt.hz td, .rt.res td, .rt .sm, .rt th small { font-size: 9.5px; }
+  .rt.hz td.ck { font-size: 13px; width: 18px; }
+  .rt.wide { min-width: 640px; }
+  .rp-p, .rp-paper, .rp-fixed { font-size: 12px; }
+  .rp-title { font-size: 14px; min-width: 0; padding: 10px; }
+  .rp-ob { min-width: 80px; font-size: 10px; }
+  .memo-foot .btn { padding: 0 12px; }
+}
+body.wide .app, body.wide .top-inner { max-width: 1180px; }
+.ed-key.grp { cursor: default; border-style: dashed; background: #fffdf4; }
+.ed-key.grp small { font-weight: 500; color: var(--muted); font-size: 13px; }
+.rt.res td.ttl { font-size: 20px; }
+.bottom.compact .btn { white-space: nowrap; }
+@media (hover: none) { .pc-only { display: none; } }
+@media (max-width: 640px) {
+  .rt.res td.ttl { font-size: 14px; }
+  .rt.wide:not(.res) { min-width: 0; }
+  .rt.wide:not(.res) td, .rt.wide:not(.res) th { font-size: 9.5px; }
+  .bottom.compact .btn { font-size: 16px; padding: 0 10px; }
+}

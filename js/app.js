@@ -11,7 +11,8 @@
   var multi = Settings.get('multi', Settings.get('admin', false));
   var nearCache = {};      // 구호기관 검색 결과 (업체 id별, 저장 안 함)
   var nearMode = 'gps';
-  var setSec = null, setEditing = false, setSnap = null;   // 기본 내용 바꾸기: 보는 항목, 수정 중 여부, 수정 전 내용    // 구호기관 찾는 기준: gps(내 위치) | base(지사 근처)
+  var customOpen = {};     // '추가하기'로 직접 입력칸을 연 항목
+  var setSec = null;       // 기본 내용 바꾸기: 지금 보는 항목
 
   var STEPS = [
     { key: 'info', title: '기본 정보', short: '기본정보', icon: '<rect x="3" y="5" width="18" height="14" rx="3"/><circle cx="9" cy="11" r="2"/><path d="M6.5 16c.6-1.5 1.6-2 2.5-2s1.9.5 2.5 2M14 10h4M14 14h3"/>' },
@@ -106,13 +107,18 @@
     else if (o.type === 'tel') input = '<input type="tel" inputmode="tel" autocomplete="off"' + attrs + ph + ' value="' + esc(v) + '" data-kind="tel">';
     else if (o.type === 'num') input = '<input type="text" inputmode="numeric" autocomplete="off"' + attrs + ph + ' value="' + esc(v) + '">';
     else input = '<input type="text" autocomplete="off"' + attrs + ph + ' value="' + esc(v) + '">';
-    var chips = '';
-    if (o.chips) chips = '<div class="chips">' + o.chips.map(function (c) {
-      var val = Array.isArray(c) ? c[0] : c, lab = Array.isArray(c) ? c[1] : c;
-      return '<button type="button" class="chip' + (v === val ? ' on' : '') + '" data-act="chip" data-path="' + path + '" data-val="' + esc(val) + '">' + esc(lab) + '</button>';
-    }).join('') + '</div>';
+    var chips = '', hideInput = false;
+    if (o.chips) {
+      var known = o.chips.some(function (c) { return (Array.isArray(c) ? c[0] : c) === v; });
+      var custom = o.add && (customOpen[path] || (v !== '' && !known));
+      chips = '<div class="chips">' + o.chips.map(function (c) {
+        var val = Array.isArray(c) ? c[0] : c, lab = Array.isArray(c) ? c[1] : c;
+        return '<button type="button" class="chip' + (v === val ? ' on' : '') + '" data-act="chip" data-path="' + path + '" data-val="' + esc(val) + '">' + esc(lab) + '</button>';
+      }).join('') + (o.add ? '<button type="button" class="chip add' + (custom ? ' on' : '') + '" data-act="chipAdd" data-path="' + path + '">＋ 추가하기</button>' : '') + '</div>';
+      if (o.add && !custom) hideInput = true;
+    }
     return '<label class="field' + (o.cls ? ' ' + o.cls : '') + '"><span class="lab">' + label + (o.req ? ' <em class="req">필수</em>' : '') + '</span>' +
-      (o.hint ? '<span class="hint">' + o.hint + '</span>' : '') + chips + (o.noInput ? '' : input) + (o.after || '') + '</label>';
+      (o.hint ? '<span class="hint">' + o.hint + '</span>' : '') + chips + (o.noInput || hideInput ? '' : input) + (o.after || '') + '</label>';
   }
 
   /* ---------- 화면 그리기 ---------- */
@@ -120,6 +126,8 @@
     var nav = document.getElementById('bottomNav'), prog = document.getElementById('progress'), menu = document.getElementById('topMenu');
     var sub = document.getElementById('topSub');
     if (sub) sub.textContent = view === 'step' && cur ? (cur.info.company || '업체명 미입력') : view === 'settings' ? '모든 업체에 똑같이 적용' : '제설작업 위험성평가 결과보고서';
+    nav.classList.toggle('compact', view === 'settings');
+    document.body.classList.toggle('wide', view === 'settings' && !!setSec);
     if (view === 'home') {
       document.getElementById('topTitle').textContent = '위험성평가 보고서 만들기';
       nav.hidden = true; prog.hidden = true; menu.hidden = true;
@@ -127,14 +135,13 @@
     }
     var bp = document.getElementById('btnPrev'), bn = document.getElementById('btnNext');
     if (view === 'settings') {
-      var sec = setSec && EDIT_SECS.filter(function (x) { return x.id === setSec; })[0];
-      document.getElementById('topTitle').textContent = sec ? sec.title : '보고서 기본 내용 바꾸기';
+      document.getElementById('topTitle').textContent = setSec ? secNo(setSec) + '. ' + SEC_TITLE[setSec] : '보고서 기본 내용 바꾸기';
       prog.hidden = true; menu.hidden = true;
-      if (!sec) nav.hidden = true;
+      if (!setSec) nav.hidden = true;
       else {
         nav.hidden = false; bn.hidden = false;
-        if (setEditing) { bp.textContent = '취소'; bp.dataset.act = 'setCancel'; bn.textContent = '수정 완료 ✔'; bn.dataset.act = 'setSave'; }
-        else { bp.textContent = '✎ 수정'; bp.dataset.act = 'setEdit'; bn.textContent = '확인 (수정 없음)'; bn.dataset.act = 'setOk'; }
+        bp.textContent = showEd ? '✎ 표시 끄기' : '✎ 수정할 곳 보기'; bp.dataset.act = 'edShow';
+        bn.textContent = '확인 ✔'; bn.dataset.act = 'setOk';
       }
       $app.innerHTML = viewSettings(); return;
     }
@@ -173,8 +180,8 @@
         if (last) {
           h += '<div class="card"><div class="card-sub">작성 중인 보고서</div><div class="card-title">' + esc(last.info.company || '업체명 미입력') + '</div>' +
             '<div class="card-sub">' + esc(last.info.contract || '') + '</div>' +
-            '<button class="btn btn-primary btn-big" data-act="open" data-id="' + last.id + '">이어서 작성하기 ▶</button>' +
-            '<button class="btn btn-ghost" data-act="restart" data-id="' + last.id + '">처음부터 새로 작성</button></div>';
+            '<div class="row2 home-btns"><button class="btn btn-primary" data-act="open" data-id="' + last.id + '">이어서 작성 ▶</button>' +
+            '<button class="btn btn-ghost" data-act="restart" data-id="' + last.id + '">새로 작성</button></div></div>';
         } else {
           h += '<button class="btn btn-primary btn-big" data-act="new">작성 시작하기 ▶</button>';
         }
@@ -199,7 +206,7 @@
       h += '<div class="home-tools">' +
         '<button class="btn btn-ghost btn-big" data-act="settings">⚙ 보고서 기본 내용 바꾸기</button>' +
         '<p class="note">위험요인, 점검 항목, 보호구 등 보고서에 미리 들어 있는 내용을 고칩니다. 모든 업체에 똑같이 적용됩니다. 고칠 것이 없으면 누르지 않아도 됩니다.</p>' +
-        '<details class="more"><summary>파일로 저장 · 다른 기기로 옮기기</summary><p class="note">입력한 내용을 파일 하나로 저장한 뒤, 다른 기기에서 「불러오기」 하면 그대로 이어서 쓸 수 있습니다.</p><div class="row2"><button class="btn btn-ghost" data-act="export">파일로 저장</button><button class="btn btn-ghost" data-act="import">불러오기</button></div></details></div>';
+        '<details class="more"><summary>파일로 저장 · 다른 기기로 옮기기</summary><p class="note">「파일로 저장」을 누르면 저장 파일(.json)이 「다운로드」 폴더에 생깁니다. 다른 기기에서 이 사이트를 열고 「불러오기」로 그 파일을 고르면 그대로 이어서 쓸 수 있습니다. (저장 파일은 직접 열어 보는 파일이 아니라 「불러오기」 전용입니다)</p><div class="row2"><button class="btn btn-ghost" data-act="export">파일로 저장</button><button class="btn btn-ghost" data-act="import">불러오기</button></div></details></div>';
       $app.innerHTML = h;
     });
   }
@@ -212,7 +219,7 @@
       field('대표자 성명', 'info.ceo', { req: 1, ph: '예) 홍길동' }) +
       field('대표자 휴대폰', 'info.ceoPhone', { type: 'tel', ph: '010-0000-0000' }) +
       field('일하는 도로공사 지사', 'info.branch', { ph: '예) 영동', hint: '「○○지사」의 ○○만 적으세요. 가까운 병원·119를 찾을 때 씁니다.' }) +
-      field('업종', 'info.bizType', { chips: ['건설기계 대여업', '제설 용역', '화물 운송업'], ph: '직접 입력도 됩니다' }) +
+      field('업종', 'info.bizType', { chips: ['건설기계 대여업', '화물 운송업'], add: 1, ph: '업종을 적어 주세요' }) +
       '<label class="field"><span class="lab">사업장 주소</span><button type="button" class="btn btn-ghost" data-act="addr">🔍 주소 찾기</button>' +
       '<input type="text" data-bind="info.address" value="' + esc(cur.info.address || '') + '" placeholder="주소 찾기를 누르거나 직접 입력">' +
       '<input type="text" data-bind="info.addressDetail" value="' + esc(cur.info.addressDetail || '') + '" placeholder="나머지 주소 (동·호수 등)"></label>' +
@@ -227,11 +234,11 @@
       h += '<div class="card"><div class="card-head"><b>근로자 ' + (i + 1) + '</b>' + (cur.workers.length > 1 ? '<button class="btn btn-danger btn-sm" data-act="delWorker" data-i="' + i + '">삭제</button>' : '') + '</div>' +
         field('이름', 'workers.' + i + '.name', { ph: '예) 김영수' }) +
         field('휴대폰', 'workers.' + i + '.phone', { type: 'tel', ph: '010-0000-0000' }) +
-        field('하는 일', 'workers.' + i + '.role', { chips: ['운전원', '작업자', '신호수'], ph: '직접 입력도 됩니다' }) + '</div>';
+        field('하는 일', 'workers.' + i + '.role', { chips: ['운전원'], add: 1, ph: '하는 일을 적어 주세요 (예: 신호수)' }) + '</div>';
     });
     h += '<button class="btn btn-ghost btn-big" data-act="addWorker">＋ 근로자 추가</button>';
     h += '<div class="card"><div class="card-head"><b>근로자 중에 해당하는 분이 있나요?</b></div><p class="hint">해당하면 눌러서 ■ 표시하세요.</p><div class="chips big">' +
-      T.FIXED.traits.map(function (t) { var on = !!cur.traits[t[0]]; return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-act="trait" data-k="' + t[0] + '">' + (on ? '■ ' : '□ ') + t[1] + (t[0] === 'senior' ? ' (55세 이상)' : '') + '</button>'; }).join('') + '</div></div>';
+      T.FIXED.traits.map(function (t) { var on = !!cur.traits[t[0]]; return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-act="trait" data-k="' + t[0] + '">' + (on ? '■ ' : '□ ') + t[1] + (t[0] === 'senior' ? ' (70세 이상)' : '') + '</button>'; }).join('') + '</div></div>';
     return h;
   }
 
@@ -421,103 +428,6 @@
   /* ---------- 보고서 기본 내용 설정 (모든 업체 공통) ---------- */
   var KRAS_TYPES = ['충돌위험 부분', '기계(설비)의 낙하, 비래, 전복, 붕괴, 전도 위험 부분', '중량물 취급작업', '추락위험 부분(개구부 등)', '화재·폭발위험', '아크, 전기화재, 감전', '기후(한랭)', '넘어짐(미끄러짐, 걸림, 헛디딤)', '끼임(감김)'];
   var CLS_TYPES = ['1. 기계설비적요인', '2. 전기적 요인', '3. 화학적 요인', '4. 생물학적 요인', '5. 작업특성 요인', '6. 작업환경 요인'];
-  var EDIT_SECS = [
-    { id: 'process', title: '사업장 개요 · 공정', paths: ['process', 'work', 'resultSubName'], render: function () {
-      return field('공정명', 'edit.process.name') + field('작업 이름', 'edit.work') + field('세부공정명', 'edit.resultSubName') +
-        field('공정설명', 'edit.process.desc', { type: 'area', rows: 4 }) + field('설비', 'edit.process.equip', { type: 'area', rows: 2 }) + field('물질', 'edit.process.material');
-    } },
-    { id: 'equip', title: '기계·기구 및 설비, 위험정보', paths: ['equipment', 'chemicals', 'info'], render: function () {
-      var h = listEditor('edit.equipment', [{ k: 'name', l: '설비명' }, { k: 'qty', l: '수량' }], { name: '', qty: '1대' }, '설비');
-      h += '<h4>유해화학물질</h4>' + listEditor('edit.chemicals', [{ k: 'name', l: '화학물질명' }, { k: 'amount', l: '취급량(일)' }, { k: 'time', l: '취급시간' }], { name: '', amount: '', time: '' }, '화학물질');
-      var hv = cur.edit.info.heavy;
-      h += '<h4>중량물 인력 취급</h4>' + field('단위 중량', 'edit.info.heavy.unit') + '<div class="chips">' +
-        [['lift', '들기'], ['push', '밀기'], ['pull', '끌기'], ['none', '해당무']].map(function (o) { return '<button class="chip' + (hv[o[0]] ? ' on' : '') + '" data-act="toggle" data-path="edit.info.heavy.' + o[0] + '">' + (hv[o[0]] ? '■ ' : '□ ') + o[1] + '</button>'; }).join('') + '</div>';
-      h += field('작업환경측정', 'edit.info.envMeasure', { chips: [['yes', '측정'], ['no', '미측정'], ['none', '해당무']], noInput: 1 });
-      return h;
-    } },
-    { id: 'patrol', title: '순회점검 조사표', paths: ['patrol'], render: function () {
-      return listEditor('edit.patrol', [{ k: 'text', l: '유해·위험 작업', t: 'area' }, { k: 'type', l: '사고·질병의 유형', list: KRAS_TYPES }], { text: '', type: '' }, '항목');
-    } },
-    { id: 'cases', title: '재해 유사사례', paths: ['cases'], render: function () {
-      return listEditor('edit.cases', [{ k: 'kind', l: '구분' }, { k: 'year', l: '연도', num: 1 }, { k: 'org', l: '기관명' }, { k: 'text', l: '사고내용', t: 'area' }, { k: 'note', l: '비고' }], { kind: '부상', year: '', org: '', text: '', note: '' }, '사례');
-    } },
-    { id: 'msds', title: 'MSDS 목록', paths: ['msds'], render: function () {
-      return listEditor('edit.msds', [{ k: 'name', l: '물질명' }, { k: 'cas', l: 'CAS No.' }, { k: 'use', l: '사용량(ℓ·㎏/일)' }, { k: 'store', l: '저장량(ℓ·㎏/일)' }, { k: 'purpose', l: '용도' }], { name: '', cas: '-', use: '', store: '', purpose: '' }, '물질');
-    } },
-    { id: 'hazard', title: '유해위험요인 분류', paths: ['hazardChecks', 'hazardEquip', 'hazardMaterial'], render: function () {
-      var set = {}; cur.edit.hazardChecks.forEach(function (k) { set[k] = 1; });
-      var h = '<p class="hint">해당하는 것을 눌러 ■ 표시하세요.</p>';
-      T.FIXED.hazardGroups.forEach(function (g) {
-        h += '<h4>' + g.no + ' ' + g.name + '</h4><div class="chips">' + g.items.map(function (it) { return '<button class="chip' + (set[it[0]] ? ' on' : '') + '" data-act="hz" data-k="' + it[0] + '">' + (set[it[0]] ? '■ ' : '□ ') + it[0] + ' ' + esc(it[1]) + '</button>'; }).join('') + '</div>';
-      });
-      return h + field('설비', 'edit.hazardEquip') + field('물질', 'edit.hazardMaterial');
-    } },
-    { id: 'results', title: '위험성평가 결과서', paths: ['results'], render: renderResults },
-    { id: 'edu', title: '교육 내용 (사전·결과 교육)', paths: ['preEdu', 'postEdu'], render: function () {
-      return '<h4>사전 교육 내용</h4>' + strList('edit.preEdu.topics', '교육 내용') + '<h4>결과 교육 내용</h4>' + strList('edit.postEdu.topics', '교육 내용') +
-        '<p class="hint">{Y}는 작성연도로 바뀝니다.</p>';
-    } },
-    { id: 'interviews', title: '근로자 청취조사 (경험담)', paths: ['interviews'], render: function () {
-      return '<p class="hint">경험담마다 근로자 이름이 차례대로 자동으로 들어갑니다.</p>' + listEditor('edit.interviews', [{ k: 'work', l: '대상공종' }, { k: 'opinion', l: '근로자 의견', t: 'area' }, { k: 'reply', l: '위험성평가 담당자 의견', t: 'area' }], { work: '', opinion: '', reply: '', worker: 0 }, '경험담');
-    } },
-    { id: 'budget', title: '안전예산 항목', paths: ['budget'], render: function () {
-      return '<p class="hint">항목 이름만 정합니다. 금액은 각 업체가 질문에 답할 때 적습니다. 「-」로 시작하면 금액을 적는 항목, 아니면 제목줄입니다.</p>' + listEditor('edit.budget', [{ k: 'item', l: '항목' }], { item: '- ', amount: '' }, '항목');
-    } },
-    { id: 'danger', title: '위험작업 관리계획', paths: ['dangerWork'], render: function () {
-      return listEditor('edit.dangerWork', [{ k: 'work', l: '작업내용' }, { k: 'place', l: '위치' }, { k: 'detail', l: '세부 공종 예시', t: 'area' }, { k: 'yes', l: '해당 여부', bool: 1 }], { work: '', place: '', detail: '', yes: true }, '작업');
-    } },
-    { id: 'ppe', title: '개인보호구', paths: ['ppe'], render: function () {
-      return '<p class="hint">대상자 칸에는 근로자 명단과 업체 이름이 자동으로 들어갑니다.</p>' +
-        listEditor('edit.ppe.rows', [{ k: 'plan', l: '지급계획', t: 'area' }, { k: 'note', l: '비고' }], { plan: '', note: '' }, '지급계획') +
-        '<h4>관리·운영방안</h4>' + strList('edit.ppe.mgmt', '방안');
-    } },
-    { id: 'insp', title: '안전점검 계획', paths: ['inspection', 'inspectionPlan'], render: function () {
-      return listEditor('edit.inspection', [{ k: 'proc', l: '공정' }, { k: 'risk', l: '위험요소', t: 'area' }, { k: 'check', l: '안전점검사항', t: 'area' }, { k: 'note', l: '비고' }], { proc: '', risk: '· ', check: '· ', note: '' }, '공정') +
-        '<h4>점검계획</h4>' + strList('edit.inspectionPlan', '점검계획');
-    } },
-    { id: 'eduRec', title: '교육실적', paths: ['eduRecord', 'eduPhotoLabel'], render: function () {
-      return '<p class="hint">「신규 근로자 채용 시」의 실시(O/X)는 질문 답에 따라 자동으로 들어갑니다(자동).</p>' +
-        listEditor('edit.eduRecord', [{ k: 'kind', l: '구분' }, { k: 'target', l: '대상' }, { k: 'std', l: '기준' }, { k: 'done', l: '실시', pick: [['auto', '자동'], ['O', 'O'], ['X', 'X']] }, { k: 'note', l: '비고' }], { kind: '', target: '근로자', std: '-', done: 'O', note: '' }, '교육') +
-        field('사진 내용', 'edit.eduPhotoLabel');
-    } },
-    { id: 'emer', title: '비상대책 흐름도', paths: ['emergencyFlow'], render: function () {
-      return listEditor('edit.emergencyFlow', [{ k: 'step', l: '단계' }, { k: 'text', l: '내용', t: 'area' }], { step: '', text: '▪ ' }, '단계');
-    } }
-  ];
-  /* 각 항목을 표로 보기 */
-  var TABLES = {
-    process: function () { var e = cur.edit, P = e.process || {}; return kv([['공정명', P.name], ['작업 이름', e.work], ['세부공정명', e.resultSubName], ['공정설명', P.desc], ['설비', P.equip], ['물질', P.material]]); },
-    equip: function () {
-      var e = cur.edit, i = e.info || {}, hv = i.heavy || {}, ck = function (b) { return b ? '■' : '□'; };
-      return '<h4>기계·기구 및 설비</h4>' + tb(['설비명', '수량'], (e.equipment || []).map(function (r) { return [r.name, r.qty]; })) +
-        '<h4>유해화학물질</h4>' + tb(['화학물질명', '취급량(일)', '취급시간'], (e.chemicals || []).map(function (r) { return [r.name, r.amount, r.time]; })) +
-        '<h4>기타 정보</h4>' + kv([['중량물 단위 중량', hv.unit], ['취급형태', '들기' + ck(hv.lift) + ' 밀기' + ck(hv.push) + ' 끌기' + ck(hv.pull) + ' 해당무' + ck(hv.none)],
-          ['작업환경측정', i.envMeasure === 'yes' ? '측정' : i.envMeasure === 'no' ? '미측정' : '해당무']]);
-    },
-    patrol: function () { return tb(['번호', '유해·위험 작업', '사고·질병의 유형'], (cur.edit.patrol || []).map(function (r, i) { return [String(i + 1), r.text, r.type]; })); },
-    cases: function () { return tb(['구분', '연도', '기관명', '사고내용'], (cur.edit.cases || []).map(function (r) { return [r.kind, r.year, r.org, r.text]; })); },
-    msds: function () { return tb(['물질명', 'CAS No.', '사용량', '저장량', '용도'], (cur.edit.msds || []).map(function (r) { return [r.name, r.cas, r.use, r.store, r.purpose]; })); },
-    hazard: function () {
-      var set = {}; (cur.edit.hazardChecks || []).forEach(function (k) { set[k] = 1; });
-      return tb(['분류', '해당 항목 (■ 해당 / □ 해당 없음)'], T.FIXED.hazardGroups.map(function (g) {
-        return [g.no + ' ' + g.name, g.items.map(function (it) { return (set[it[0]] ? '■ ' : '□ ') + it[1]; }).join('\n')];
-      }));
-    },
-    results: function () {
-      return tb(['세부작업', '위험분류', '유해·위험 상황', '현재 안전보건조치', '가능성', '중대성', '위험성'], (cur.edit.results || []).map(function (r) {
-        var v = (+r.p || 0) * (+r.s || 0); return [r.task, r.cls, r.situation, r.measure, String(r.p || ''), String(r.s || ''), v ? v + (v >= 6 ? ' 높음' : v === 4 ? ' 보통' : ' 낮음') : ''];
-      }));
-    },
-    edu: function () { var e = cur.edit; return '<h4>사전 교육 내용</h4>' + ol((e.preEdu || {}).topics) + '<h4>결과 교육 내용</h4>' + ol((e.postEdu || {}).topics); },
-    interviews: function () { return tb(['번호', '대상공종', '근로자 의견', '담당자 의견'], (cur.edit.interviews || []).map(function (r, i) { return [String(i + 1), r.work, r.opinion, r.reply]; })); },
-    budget: function () { return '<p class="hint">금액은 각 업체가 질문에 답할 때 적습니다.</p>' + tb(['안전예산 항목'], (cur.edit.budget || []).map(function (r) { return [r.item]; })); },
-    danger: function () { return tb(['작업내용', '위치', '세부 공종 예시', '해당'], (cur.edit.dangerWork || []).map(function (r) { return [r.work, r.place, r.detail, r.yes ? '√' : '']; })); },
-    ppe: function () { var p = cur.edit.ppe || {}; return '<p class="hint">대상자 칸에는 근로자 명단과 업체 이름이 자동으로 들어갑니다.</p>' + tb(['지급계획', '비고'], (p.rows || []).map(function (r) { return [r.plan, r.note]; })) + '<h4>관리·운영방안</h4>' + ol(p.mgmt); },
-    insp: function () { var e = cur.edit; return tb(['공정', '위험요소', '안전점검사항'], (e.inspection || []).map(function (r) { return [r.proc, r.risk, r.check]; })) + '<h4>점검계획</h4>' + ol(e.inspectionPlan); },
-    eduRec: function () { var e = cur.edit; return tb(['구분', '대상', '기준', '실시'], (e.eduRecord || []).map(function (r) { return [r.kind, r.target, r.std, r.done === 'auto' ? '자동(질문 답)' : r.done]; })) + kv([['사진 내용', e.eduPhotoLabel]]); },
-    emer: function () { return tb(['단계', '내용'], (cur.edit.emergencyFlow || []).map(function (r) { return [r.step, r.text]; })); }
-  };
-  EDIT_SECS.forEach(function (s) { s.table = TABLES[s.id]; });
   function listEditor(path, fields, tmpl, noun) {
     var arr = getP(cur, path) || [], h = '';
     arr.forEach(function (it, i) {
@@ -542,67 +452,379 @@
     h += '<button class="btn btn-ghost" data-act="add" data-path="' + path + '" data-tmpl="' + esc(JSON.stringify(tmpl)) + '">＋ ' + noun + ' 추가</button>';
     return h;
   }
-  function strList(path, noun) {
-    var arr = getP(cur, path) || [], h = '';
-    arr.forEach(function (s, i) {
-      h += '<div class="sl"><textarea rows="2" data-bind="' + path + '.' + i + '">' + esc(s) + '</textarea><button class="btn btn-sm btn-danger" data-act="rm" data-path="' + path + '" data-i="' + i + '">삭제</button></div>';
-    });
-    return h + '<button class="btn btn-ghost" data-act="add" data-path="' + path + '" data-tmpl="&quot;&quot;">＋ ' + noun + ' 추가</button>';
-  }
-  function renderResults() {
-    var arr = cur.edit.results, h = '<p class="hint">가능성 × 중대성 = 위험성이 자동으로 계산됩니다. 위험성이 <b>보통(4) 이상</b>이면 감소대책을 적어 주세요.</p>';
-    arr.forEach(function (r, i) {
-      var p = 'edit.results.' + i, rv = (+r.p || 0) * (+r.s || 0), lv = rv >= 6 ? '높음' : rv === 4 ? '보통' : rv ? '낮음' : '';
-      h += '<div class="li"><div class="li-head"><b>' + (i + 1) + '. ' + esc(r.task || '') + '</b><span>' + (i > 0 ? '<button class="btn btn-sm btn-ghost" data-act="mv" data-path="edit.results" data-i="' + i + '" data-d="-1">▲</button>' : '') + '<button class="btn btn-sm btn-danger" data-act="rm" data-path="edit.results" data-i="' + i + '">삭제</button></span></div>' +
-        field('세부작업', p + '.task') + field('위험분류', p + '.cls', { chips: CLS_TYPES }) +
-        field('유해·위험 상황 및 결과', p + '.situation', { type: 'area' }) + field('현재 안전보건조치', p + '.measure', { type: 'area', rows: 4 }) +
-        field('재해사례', p + '.cases') +
-        pick123('가능성(빈도)', p + '.p', r.p, ['하', '중', '상']) + pick123('중대성(강도)', p + '.s', r.s, ['소', '중', '대']) +
-        '<div class="risk r' + (rv >= 6 ? 'h' : rv === 4 ? 'm' : 'l') + '">위험성 = ' + (rv || '-') + (lv ? ' (' + lv + ')' : '') + '</div>';
-      var needRed = rv >= 4;
-      if (needRed) h += '<div class="warn">위험성이 ' + lv + '입니다. 감소대책을 적어 주세요.</div>';
-      h += '<details class="sub"' + (needRed || r.redText ? ' open' : '') + '><summary>감소대책 · 개선 (선택)</summary>' +
-        field('NO', p + '.redNo') + field('감소대책 세부내용', p + '.redText', { type: 'area' }) + field('개선후 위험성', p + '.after') +
-        field('개선 예정일', p + '.plan') + field('완료일', p + '.done') + field('담당자', p + '.owner') + '</details></div>';
-    });
-    h += '<button class="btn btn-ghost" data-act="add" data-path="edit.results" data-tmpl="' + esc(JSON.stringify({ task: '', cls: '1. 기계설비적요인', situation: '', measure: '', cases: '', p: 1, s: 2, redNo: '', redText: '', after: '', plan: '', done: '', owner: '' })) + '">＋ 위험요인 추가</button>';
-    return h;
-  }
   function pick123(label, path, v, names) {
     return '<div class="field"><span class="lab">' + label + '</span><div class="chips">' + [1, 2, 3].map(function (n) {
       return '<button class="chip num' + (+v === n ? ' on' : '') + '" data-act="setv" data-path="' + path + '" data-json="' + n + '">' + n + ' (' + names[n - 1] + ')</button>';
     }).join('') + '</div></div>';
   }
+  function nl(s) { return esc(s == null ? '' : s).replace(/\n/g, '<br>'); }
+  /* =========================================================
+   * 보고서 기본 내용 바꾸기 — 보고서 목차(1~4장) 아래 항목, 보고서 표 모양 그대로,
+   * 수정 가능한 칸을 누르면 수정 창(메모)이 뜸
+   * ========================================================= */
+  var CHAPTERS = [
+    { no: '1', title: '위험성평가 실시규정', fixed: '법령·지침에 따른 고정 내용이라 바꾸지 않습니다. 업체명·대표자 이름 등은 자동으로 들어갑니다.' },
+    { no: '2', title: '위험성평가 실시', items: ['process', 'equip', 'patrol', 'cases', 'msds', 'hazard', 'results'] },
+    { no: '3', title: '위험성평가 교육', items: ['edu', 'interviews'] },
+    { no: '4', title: '기타 제출서류', items: ['@eval', 'budget', 'danger', 'ppe', 'insp', 'eduRec', 'emer'] }
+  ];
+  var SEC_TITLE = {
+    process: '사업장 개요', equip: '안전·보건상 위험정보', patrol: '사업장 순회점검 조사표', cases: '재해사례·재해통계 정보 조사',
+    msds: '물질안전보건자료 (MSDS)', hazard: '유해위험요인 분류', results: '위험성평가 결과서',
+    edu: '교육 결과 (사전 교육 · 결과 교육)', interviews: '근로자 청취조사표',
+    '@eval': '수급업체 산업재해예방 조치능력 평가표', budget: '안전 예산 현황', danger: '위험작업 관리계획', ppe: '개인보호구',
+    insp: '안전점검 계획', eduRec: '교육실적', emer: '비상대책'
+  };
+  function secNo(id) {
+    for (var c = 0; c < CHAPTERS.length; c++) { var it = CHAPTERS[c].items || []; var i = it.indexOf(id); if (i >= 0) return CHAPTERS[c].no + '-' + (i + 1); }
+    return '';
+  }
+  var ROWF = {
+    'edit.patrol': [{ k: 'text', l: '유해·위험 작업', t: 'area' }, { k: 'type', l: '사고·질병의 유형', list: null }],
+    'edit.cases': [{ k: 'kind', l: '구분' }, { k: 'year', l: '연도', num: 1 }, { k: 'org', l: '기관명' }, { k: 'text', l: '사고내용', t: 'area' }, { k: 'note', l: '비고' }],
+    'edit.msds': [{ k: 'name', l: '물질명' }, { k: 'cas', l: 'CAS No.' }, { k: 'use', l: '사용량(ℓ·㎏/일)' }, { k: 'store', l: '저장량(ℓ·㎏/일)' }, { k: 'purpose', l: '용도' }],
+    'edit.equipment': [{ k: 'name', l: '설비명' }, { k: 'qty', l: '수량' }],
+    'edit.chemicals': [{ k: 'name', l: '화학물질명' }, { k: 'amount', l: '취급량(일)' }, { k: 'time', l: '취급시간' }],
+    'edit.interviews': [{ k: 'work', l: '대상공종' }, { k: 'opinion', l: '근로자 의견', t: 'area' }, { k: 'reply', l: '위험성평가 담당자 의견', t: 'area' }],
+    'edit.budget': [{ k: 'item', l: '항목 (「-」로 시작하면 금액을 적는 줄, 아니면 제목줄)' }],
+    'edit.dangerWork': [{ k: 'work', l: '작업내용' }, { k: 'place', l: '위치' }, { k: 'detail', l: '세부 공종 예시', t: 'area' }, { k: 'yes', l: '해당 여부', bool: 1 }],
+    'edit.ppe.rows': [{ k: 'plan', l: '지급계획', t: 'area' }, { k: 'note', l: '비고' }],
+    'edit.inspection': [{ k: 'proc', l: '공정' }, { k: 'risk', l: '위험요소', t: 'area' }, { k: 'check', l: '안전점검사항', t: 'area' }, { k: 'note', l: '비고' }],
+    'edit.eduRecord': [{ k: 'kind', l: '구분' }, { k: 'target', l: '대상' }, { k: 'std', l: '기준' }, { k: 'done', l: '실시', pick: [['auto', '자동(질문 답)'], ['O', 'O'], ['X', 'X']] }, { k: 'note', l: '비고' }],
+    'edit.emergencyFlow': [{ k: 'step', l: '단계' }, { k: 'text', l: '내용', t: 'area' }]
+  };
+  var ROWT = {
+    'edit.patrol': { text: '', type: '' }, 'edit.cases': { kind: '부상', year: '', org: '', text: '', note: '' },
+    'edit.msds': { name: '', cas: '-', use: '', store: '', purpose: '' }, 'edit.equipment': { name: '', qty: '1대' }, 'edit.chemicals': { name: '', amount: '', time: '' },
+    'edit.interviews': { work: '', opinion: '', reply: '', worker: 0 }, 'edit.budget': { item: '- ', amount: '' },
+    'edit.dangerWork': { work: '', place: '', detail: '', yes: true }, 'edit.ppe.rows': { plan: '', note: '' },
+    'edit.inspection': { proc: '', risk: '· ', check: '· ', note: '' }, 'edit.eduRecord': { kind: '', target: '근로자', std: '-', done: 'O', note: '' },
+    'edit.emergencyFlow': { step: '', text: '▪ ' },
+    'edit.results': { task: '', cls: '1. 기계설비적요인', situation: '', measure: '', cases: '', p: 1, s: 2, redNo: '', redText: '', after: '', plan: '', done: '', owner: '' }
+  };
+  function fieldFor(p, f, it) {
+    if (f.bool) {
+      var on = !!it[f.k];
+      return '<div class="field"><span class="lab">' + f.l + '</span><div class="chips"><button class="chip' + (on ? ' on' : '') + '" data-act="setv" data-path="' + p + '" data-json="true">√ 해당</button><button class="chip' + (!on ? ' on' : '') + '" data-act="setv" data-path="' + p + '" data-json="false">해당 없음</button></div></div>';
+    }
+    if (f.pick) return '<div class="field"><span class="lab">' + f.l + '</span><div class="chips">' + f.pick.map(function (o) { return '<button class="chip' + (String(it[f.k]) === o[0] ? ' on' : '') + '" data-act="setv" data-path="' + p + '" data-val="' + esc(o[0]) + '">' + esc(o[1]) + '</button>'; }).join('') + '</div></div>';
+    if (f.k === 'type' && p.indexOf('edit.patrol') === 0) return field(f.l, p, { chips: KRAS_TYPES, hint: '아래에서 고르거나 직접 적으세요' });
+    return field(f.l, p, { type: f.t === 'area' ? 'area' : f.num ? 'num' : 'text', rows: 3 });
+  }
+
+  /* --- 수정 창 등록부: 화면을 그릴 때마다 새로 만듦 --- */
+  var EDREG = {}, memoKey = null, memoSnap = null;
+  function reg(key, label, render, del) { EDREG[key] = { label: label, render: render, del: del }; return key; }
+  function edAttr(key) { return ' class="ed" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정"'; }
+  function cell(tag, key, label, html, extra, renderFn, del) {
+    reg(key, label, renderFn, del);
+    return '<' + tag + edAttr(key) + (extra || '') + '>' + html + '</' + tag + '>';
+  }
+  function fld(key, label, path, o) { return cell('td', key, label, nl(getP(cur, path)) || '<span class="ph">(비어 있음)</span>', o && o.attrs, function () { return field(label, path, { type: (o && o.type) || 'area', rows: 5 }); }); }
+  function rowReg(listPath, i, label) {
+    var key = listPath + '.' + i;
+    return reg(key, label + ' ' + (i + 1), function () {
+      var it = getP(cur, listPath)[i] || {};
+      if (listPath === 'edit.results') return resultRowFields(i);
+      return (ROWF[listPath] || []).map(function (f) { return fieldFor(key + '.' + f.k, f, it); }).join('');
+    }, function () { getP(cur, listPath).splice(i, 1); });
+  }
+  function lineReg(listPath, i, label) {
+    var key = listPath + '.' + i;
+    return reg(key, label + ' ' + (i + 1), function () { return field(label, key, { type: 'area', rows: 3 }); }, function () { getP(cur, listPath).splice(i, 1); });
+  }
+  function addBtn(listPath, noun) { return '<button class="btn btn-sm btn-ghost rp-add" data-act="edAdd" data-path="' + listPath + '">＋ ' + noun + ' 추가</button>'; }
+  function ph(t) { return '<span class="ph">' + esc(t || '업체 입력') + '</span>'; }
+  function au(t) { return '<span class="au">' + esc(t) + '</span>'; }
+  function resultRowFields(i) {
+    var r = cur.edit.results[i] || {}, p = 'edit.results.' + i, rv = (+r.p || 0) * (+r.s || 0), lv = rv >= 6 ? '높음' : rv === 4 ? '보통' : rv ? '낮음' : '';
+    return field('세부작업', p + '.task') + field('위험분류', p + '.cls', { chips: CLS_TYPES }) +
+      field('유해·위험 상황 및 결과', p + '.situation', { type: 'area' }) + field('현재 안전보건조치', p + '.measure', { type: 'area', rows: 4 }) +
+      field('재해사례', p + '.cases') +
+      pick123('가능성(빈도)', p + '.p', r.p, ['하', '중', '상']) + pick123('중대성(강도)', p + '.s', r.s, ['소', '중', '대']) +
+      '<div class="risk r' + (rv >= 6 ? 'h' : rv === 4 ? 'm' : 'l') + '">위험성 = ' + (rv || '-') + (lv ? ' (' + lv + ')' : '') + '</div>' +
+      (rv >= 4 ? '<div class="warn">위험성이 ' + lv + '입니다. 감소대책을 적어 주세요.</div>' : '') +
+      '<details class="sub"' + (rv >= 4 || r.redText ? ' open' : '') + '><summary>감소대책 · 개선 (선택)</summary>' +
+      field('NO', p + '.redNo') + field('감소대책 세부내용', p + '.redText', { type: 'area' }) + field('개선후 위험성', p + '.after') +
+      field('개선 예정일', p + '.plan') + field('완료일', p + '.done') + field('담당자', p + '.owner') + '</details>';
+  }
+  function rows(listPath, label, cellsFn) {
+    return (getP(cur, listPath) || []).map(function (it, i) {
+      var key = rowReg(listPath, i, label);
+      return '<tr class="ed-row" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + cellsFn(it, i) + '</tr>';
+    }).join('');
+  }
+  function lines(listPath, label, prefix) {
+    return (getP(cur, listPath) || []).map(function (t, i) {
+      var key = lineReg(listPath, i, label);
+      return '<div' + edAttr(key) + '>' + (prefix || '') + nl(String(t).replace(/\{Y\}/g, String(new Date().getFullYear()))) + '</div>';
+    }).join('');
+  }
+  function orgHtml() {
+    return '<div class="rp-org"><div class="rp-ob"><div class="h1">사 장</div><div class="r"><span>대표</span>' + ph('대표자 이름') + '</div></div><i></i><div class="rp-ob"><div class="h2">참여근로자</div><div class="r1">' + ph('근로자 이름') + '</div></div></div>';
+  }
+
+  /* --- 항목별 보고서 모양 --- */
+  var PAGES = {
+    process: function () {
+      var E = cur.edit, P = E.process || {};
+      return '<h3 class="rp-h">1. 사업장 개요</h3><div class="rp-wrap"><table class="rt">' +
+        '<colgroup><col style="width:9%"><col style="width:14%"><col style="width:13%"><col style="width:10%"><col style="width:14%"><col style="width:13%"><col style="width:9%"><col style="width:9%"><col style="width:9%"></colgroup>' +
+        '<tr><th colspan="2">사업장명</th><td colspan="3">' + ph() + '</td><th colspan="2">사업주명</th><td colspan="2">' + ph() + '</td></tr>' +
+        '<tr><th colspan="2">업종</th><td colspan="3">' + ph() + '</td><th colspan="2">근로자수</th><td colspan="2">' + au('근로자 명단 수') + '</td></tr>' +
+        '<tr><th colspan="2">주소</th><td colspan="7">' + ph() + '</td></tr>' +
+        '<tr><th colspan="2" class="top">조직도</th><td colspan="7">' + orgHtml() + '</td></tr>' +
+        '<tr><th colspan="9">공정분석</th></tr>' +
+        '<tr><th>No.</th><th colspan="2">공정명</th><th>대상</th><th colspan="2">공정설명</th><th colspan="2">설비</th><th>물질</th></tr>' +
+        '<tr class="c"><td>1</td>' + fld('process.name', '공정분석 › 공정명', 'edit.process.name', { attrs: ' colspan="2"', type: 'text' }) + '<td>' + au('근로자 이름') + '</td>' +
+        fld('process.desc', '공정분석 › 공정설명', 'edit.process.desc', { attrs: ' colspan="2"' }) + fld('process.equip', '공정분석 › 설비', 'edit.process.equip', { attrs: ' colspan="2"' }) +
+        fld('process.material', '공정분석 › 물질', 'edit.process.material', { type: 'text' }) + '</tr></table></div>';
+    },
+    equip: function () {
+      var E = cur.edit, i = E.info || {}, hv = i.heavy || {}, ck = function (b) { return b ? '■' : '□'; };
+      var eqKey = reg('equip.list', '기계·기구 및 설비 목록', function () { return listEditor('edit.equipment', ROWF['edit.equipment'], ROWT['edit.equipment'], '설비'); });
+      var chKey = reg('chem.list', '유해화학물질 목록', function () { return listEditor('edit.chemicals', ROWF['edit.chemicals'], ROWT['edit.chemicals'], '화학물질'); });
+      var hvKey = reg('heavy', '중량물 인력 취급', function () {
+        var h2 = cur.edit.info.heavy;
+        return field('단위 중량', 'edit.info.heavy.unit', { type: 'text' }) + '<div class="field"><span class="lab">취급형태</span><div class="chips">' +
+          [['lift', '들기'], ['push', '밀기'], ['pull', '끌기'], ['none', '해당무']].map(function (o) { return '<button class="chip' + (h2[o[0]] ? ' on' : '') + '" data-act="toggle" data-path="edit.info.heavy.' + o[0] + '">' + (h2[o[0]] ? '■ ' : '□ ') + o[1] + '</button>'; }).join('') + '</div></div>';
+      });
+      var envKey = reg('env', '작업환경측정', function () { return field('작업환경측정', 'edit.info.envMeasure', { chips: [['yes', '측정'], ['no', '미측정'], ['none', '해당무']], noInput: 1 }); });
+      var eq = E.equipment || [], ch = E.chemicals || [];
+      var env = i.envMeasure || 'none';
+      var other = [
+        '○ 작업표준, 작업절차에 관한 정보', '- 안전보건경영시스템(KOSHA-MS) 메뉴얼', '○ 기계·기구 및 설비의 사양서, 물질안전보건자료 등의 유해·위험요인에 관한 정보', '- MSDS자료 참조[별도첨부]',
+        '○ 기계·기구 및 설비의 공정흐름과 작업주변의 환경에 관한 정보', '- 안전보건경영시스템(KOSHA-MS) 메뉴얼'
+      ].map(function (t) { return '<div>' + esc(t) + '</div>'; }).join('') +
+        '<div>○ 도급(일부, 전부 또는 혼재작업) ' + au('질문 답') + '</div><div>○ 재해사례, 재해통계 등에 관한 정보</div><div>- 재해사례 및 재해통계 정보조사 참조</div>' +
+        '<div>○ 안전작업허가증 필요작업 ' + au('질문 답') + '</div>' +
+        '<div' + edAttr(hvKey) + '>○ 중량물 인력 취급 시 단위 중량(' + esc(hv.unit || '') + ') 및 취급형태<br>(들기' + ck(hv.lift) + ', 밀기' + ck(hv.push) + ', 끌기' + ck(hv.pull) + ', 해당무' + ck(hv.none) + ')</div>' +
+        '<div' + edAttr(envKey) + '>○ 작업환경측정 유무(측정' + ck(env === 'yes') + ', 미측정' + ck(env === 'no') + ', 해당무' + ck(env === 'none') + ')</div>' +
+        '<div>○ 근로자 건강진단 유무 ' + au('질문 답') + '</div><div>○ 근로자 구성 및 경력특성 ' + au('근로자 화면에서 선택') + '</div><div>○ 그 밖에 위험성평가에 참고가 되는 자료 등</div>';
+      return '<div class="rp-wrap"><table class="rt wide">' +
+        '<tr><th>작업</th>' + fld('work', '작업 이름', 'edit.work', { type: 'text' }) + '<td colspan="5" rowspan="2" class="ttl">안전ㆍ보건상 위험정보</td><th>근로자수</th><td>' + au('자동') + '</td></tr>' +
+        '<tr><th>평가일시</th><td>' + au('작성일') + '</td><th>평가자</th><td>' + au('대표자') + '</td></tr>' +
+        '<tr><th rowspan="2">공정</th><th colspan="2">기계 ･ 기구 및 설비</th><th colspan="3">유 해 화 학 물 질</th><th colspan="3" rowspan="2">기타 안전ㆍ보건상 정보</th></tr>' +
+        '<tr><th>설 비 명</th><th>수량</th><th>화학물질명</th><th>취급량(일)</th><th>취급시간</th></tr>' +
+        '<tr class="c"><td>' + nl(E.work) + '</td>' +
+        '<td' + edAttr(eqKey) + '>' + eq.map(function (e) { return esc(e.name); }).join('<br>') + '</td>' +
+        '<td' + edAttr(eqKey) + '>' + eq.map(function (e) { return esc(e.qty); }).join('<br>') + '</td>' +
+        '<td' + edAttr(chKey) + '>' + ch.map(function (e) { return esc(e.name); }).join('<br>') + '</td>' +
+        '<td' + edAttr(chKey) + '>' + ch.map(function (e) { return esc(e.amount); }).join('<br>') + '</td>' +
+        '<td' + edAttr(chKey) + '>' + ch.map(function (e) { return esc(e.time); }).join('<br>') + '</td>' +
+        '<td colspan="3" class="l sm">' + other + '</td></tr></table></div>';
+    },
+    patrol: function () {
+      return '<div class="rp-wrap"><table class="rt">' +
+        '<colgroup><col style="width:72%"><col style="width:28%"></colgroup>' +
+        '<tr><th colspan="2" class="ttl2">사업장 순회점검에 의한 유해·위험요인 조사표</th></tr>' +
+        '<tr><td colspan="2" class="l">실시방법: 위험성평가 수행자가 정기적으로 사업장을 순회점검하고 이 조사표를 사용하여 유해·위험요인을 찾음</td></tr>' +
+        '<tr><td colspan="2" class="l">수행자 성명 : ' + au('대표자') + ' (사장)<br>수 행 일 시 : ' + au('점검 날짜') + '</td></tr>' +
+        '<tr><th>유해·위험 작업<br><small>※ 발견한 작업의 내용, 장소 및 유해위험 정도를 표시함</small></th><th>사고·질병의 유형</th></tr>' +
+        rows('edit.patrol', '조사 항목', function (r) { return '<td class="l">' + nl(r.text) + '</td><td class="l">' + nl(r.type) + '</td>'; }) +
+        '<tr><th colspan="2">사고·질병의 유형 -위험성 평가 지원시스템 (KRAS) 분류-</th></tr>' +
+        T.FIXED.kras.map(function (k) { return '<tr><td class="l">' + esc(k[0]) + '</td><td class="l sm">' + esc(k[1]) + '</td></tr>'; }).join('') +
+        '</table></div>' + addBtn('edit.patrol', '조사 항목');
+    },
+    cases: function () {
+      return '<div class="rp-title orange">재해사례, 재해통계<br>정보 조사</div>' +
+        '<p class="rp-p">□ 공종명 : ' + nl(cur.edit.work) + '</p><p class="rp-p">□ 재해통계 ' + au('질문 답으로 자동') + '</p>' +
+        '<div class="rp-wrap"><table class="rt"><tr><th>사 고</th><th>사망(명)</th><th>부상(명)</th><th>비고</th></tr><tr class="c"><td>' + au('자동') + '</td><td>' + au('자동') + '</td><td>' + au('자동') + '</td><td></td></tr></table></div>' +
+        '<p class="rp-p">□ 유사사례</p><div class="rp-wrap"><table class="rt"><colgroup><col style="width:10%"><col style="width:9%"><col style="width:22%"><col><col style="width:10%"></colgroup>' +
+        '<tr><th>구분</th><th>연도</th><th>기관명</th><th>사고내용</th><th>비고</th></tr>' +
+        rows('edit.cases', '유사사례', function (r) { return '<td>' + nl(r.kind) + '</td><td>' + nl(r.year) + '</td><td>' + nl(r.org) + '</td><td class="l">' + nl(r.text) + '</td><td>' + nl(r.note) + '</td>'; }) +
+        '</table></div>' + addBtn('edit.cases', '유사사례');
+    },
+    msds: function () {
+      return '<div class="rp-title">물질안전보건자료</div><div class="rp-wrap"><table class="rt">' +
+        '<tr><th colspan="6" class="ttl2">MSDS 목록</th></tr><tr><th>연번</th><th>물질명</th><th>CAS No.</th><th>사용량<br>(ℓ·㎏/일)</th><th>저장량<br>(ℓ·㎏/일)</th><th>용도</th></tr>' +
+        rows('edit.msds', '물질', function (m, i) { return '<td>' + (i + 1) + '</td><td>' + nl(m.name) + '</td><td>' + nl(m.cas) + '</td><td>' + nl(m.use) + '</td><td>' + nl(m.store) + '</td><td>' + nl(m.purpose) + '</td>'; }) +
+        '<tr><td colspan="6" class="note-row">…빈 줄은 보고서에서 22번까지 자동으로 채워집니다</td></tr></table></div>' + addBtn('edit.msds', '물질');
+    },
+    hazard: function () {
+      var E = cur.edit, set = {}; (E.hazardChecks || []).forEach(function (k) { set[k] = 1; });
+      var h = '<div class="rp-wrap"><table class="rt hz"><tr><th colspan="11" class="ttl2">유해위험요인 분류</th></tr>' +
+        '<tr><th>공 정</th><td>' + nl(E.work) + '</td><th colspan="2">세부 분류</th><td>' + nl(E.resultSubName || E.work) + '</td><th colspan="2">설비</th>' + fld('hz.equip', '유해위험요인 분류 › 설비', 'edit.hazardEquip', { type: 'text' }) + '<th colspan="2">물질</th>' + fld('hz.mat', '유해위험요인 분류 › 물질', 'edit.hazardMaterial', { type: 'text' }) + '</tr>';
+      T.FIXED.hazardGroups.forEach(function (g) {
+        var n = Math.ceil(g.items.length / 3);
+        for (var r = 0; r < n; r++) {
+          h += '<tr>' + (r === 0 ? '<td rowspan="' + n + '">' + g.no + '</td><td rowspan="' + n + '">' + esc(g.name) + '</td>' : '');
+          for (var k = 0; k < 3; k++) {
+            var it = g.items[r * 3 + k];
+            if (it) h += '<td class="ed ck" data-act="hz" data-k="' + it[0] + '" title="눌러서 해당/해당 없음 바꾸기">' + (set[it[0]] ? '▣' : '□') + '</td><td>' + it[0] + '</td><td class="l">' + esc(it[1]) + '</td>';
+            else h += '<td></td><td></td><td></td>';
+          }
+          h += '</tr>';
+        }
+      });
+      return h + '</table></div><p class="hint">▣/□ 칸을 누르면 바로 바뀝니다.</p>';
+    },
+    results: function () {
+      var E = cur.edit;
+      return '<div class="rp-wrap"><table class="rt wide res">' +
+        '<tr><th colspan="2" class="g">공정명</th>' + fld('work2', '공정명', 'edit.work', { attrs: ' colspan="2"', type: 'text' }) + '<td colspan="6" rowspan="2" class="ttl green">위험성평가 결과서</td><th colspan="2" class="g">평가일자</th><td colspan="2">' + au('작성일') + '</td></tr>' +
+        '<tr><th colspan="2" class="g">세부공정명</th>' + fld('subname', '세부공정명', 'edit.resultSubName', { attrs: ' colspan="2"', type: 'text' }) + '<th colspan="2" class="g">평 가 자</th><td colspan="2">' + au('대표자') + '</td></tr>' +
+        '<tr><th rowspan="2" class="g">세부작업</th><th colspan="2" class="g">유해위험요인 파악</th><th rowspan="2" class="g">현재 안전보건조치</th><th rowspan="2" class="g">재해사례</th><th colspan="3" class="g">현재 위험성</th><th colspan="2" class="g">감소대책</th><th rowspan="2" class="g">개선후<br>위험성</th><th rowspan="2" class="g">개선<br>예정일</th><th rowspan="2" class="g">완료일</th><th rowspan="2" class="g">담당자</th></tr>' +
+        '<tr><th class="g">위험분류</th><th class="g">유해・위험 상황 및 결과</th><th class="g">가능성</th><th class="g">중대성</th><th class="g">위험성</th><th class="g">NO</th><th class="g">세부내용</th></tr>' +
+        rows('edit.results', '위험요인', function (r) {
+          var v = (+r.p || 0) * (+r.s || 0);
+          return '<td>' + nl(r.task) + '</td><td>' + nl(r.cls) + '</td><td class="l">' + nl(r.situation) + '</td><td class="l">' + nl(r.measure) + '</td><td>' + nl(r.cases) + '</td><td>' + (r.p || '') + '</td><td>' + (r.s || '') + '</td><td>' + (v ? v + '<br>(' + (v >= 6 ? '높음' : v === 4 ? '보통' : '낮음') + ')' : '') + '</td><td>' + nl(r.redNo) + '</td><td class="l">' + nl(r.redText) + '</td><td>' + nl(r.after) + '</td><td>' + nl(r.plan) + '</td><td>' + nl(r.done) + '</td><td>' + nl(r.owner) + '</td>';
+        }) + '</table></div>' + addBtn('edit.results', '위험요인');
+    },
+    edu: function () {
+      function block(title, path) {
+        return '<div class="rp-paper"><div class="rp-lt">' + esc(title.replace('{Y}', String(new Date().getFullYear()))) + '</div>' +
+          '<p>□ 교육결과</p><p>o <b>(일 시)</b> ' + au('날짜 질문') + '</p><p>o <b>(장 소)</b> ' + au('지사·업체 이름으로 자동') + '</p><p>o <b>(교 육 자)</b> 사장 ' + au('대표자') + '</p><p>o <b>(참 석 자)</b> ' + au('근로자 명단') + '</p>' +
+          '<p><b>o (교육내용)</b></p>' + lines(path, path.indexOf('pre') >= 0 ? '사전 교육 내용' : '결과 교육 내용', 'o ') + addBtn(path, '교육 내용') +
+          '<p>□ 사진대지</p><div class="rp-photos"><div>' + ph('사진 (업체가 넣음)') + '</div><div>' + ph('사진 (업체가 넣음)') + '</div></div></div>';
+      }
+      return block('{Y}년 위험성평가 사전 교육 결과', 'edit.preEdu.topics') + block('{Y}년 위험성평가 결과 교육 실시', 'edit.postEdu.topics');
+    },
+    interviews: function () {
+      var h = '<div class="rp-wrap"><table class="rt"><colgroup><col style="width:28%"><col></colgroup>' +
+        '<tr><th colspan="2" class="ttl2">근로자 청취조사에 의한 유해·위험요인 조사표</th></tr>' +
+        '<tr><th>실시대상</th><td>' + au('계약명') + '</td></tr><tr><th>수행자(소속/성명)</th><td>사장 ' + au('대표자') + '</td></tr>' +
+        '<tr><th>근로자(소속/성명)</th><td>' + au('근로자 명단') + '</td></tr><tr><th>수행일시</th><td>' + au('날짜 질문') + '</td></tr>';
+      (cur.edit.interviews || []).forEach(function (iv, i) {
+        var key = rowReg('edit.interviews', i, '경험담');
+        h += '<tr><th colspan="2" class="l">경험담 ' + (i + 1) + '　성 명 : ' + au('근로자 이름 자동') + ' (인)</th></tr>' +
+          '<tr class="ed-row" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정"><td colspan="2" class="l">【대상공종】' + nl(iv.work) + '<br>【근로자 의견】' + nl(iv.opinion) + '<br>【위험성평가 담당자 의견】' + nl(iv.reply) + '</td></tr>';
+      });
+      return h + '</table></div>' + addBtn('edit.interviews', '경험담');
+    },
+    '@eval': function () { return ''; },
+    budget: function () {
+      return '<h3 class="rp-h">안전 예산 현황</h3><p class="rp-p">ㅇ 안전예산 편성 현황 (단위 : 천원)</p><div class="rp-wrap"><table class="rt"><colgroup><col><col style="width:30%"></colgroup>' +
+        '<tr><th rowspan="2">구 분</th><th>' + au('작성연도') + '</th></tr><tr><th>예산</th></tr><tr class="c"><td>계</td><td>' + au('자동 합계') + '</td></tr>' +
+        rows('edit.budget', '예산 항목', function (b) { return '<td class="l">' + nl(b.item) + '</td><td>' + (/^\s*-/.test(b.item) ? ph('업체가 질문에서 입력') : '') + '</td>'; }) +
+        '</table></div>' + addBtn('edit.budget', '예산 항목');
+    },
+    danger: function () {
+      return '<h3 class="rp-h">위험작업 관리계획</h3><p class="rp-p">ㅇ 위험작업 검토</p><div class="rp-wrap"><table class="rt"><colgroup><col style="width:30%"><col style="width:13%"><col><col style="width:11%"></colgroup>' +
+        '<tr><th>작업내용</th><th>위 치</th><th>세부 공종 예시</th><th>해당<br>여부</th></tr>' +
+        rows('edit.dangerWork', '위험작업', function (d) { return '<td class="l">' + nl(d.work) + '</td><td>' + nl(d.place) + '</td><td class="l">' + nl(d.detail) + '</td><td>' + (d.yes ? '√' : '') + '</td>'; }) +
+        '</table></div>' + addBtn('edit.dangerWork', '위험작업') +
+        '<div class="rp-fixed">' + (cur.edit.dangerPlan || []).map(function (d) { return '<p><b>' + esc(d.b) + '</b>' + esc(d.t) + '</p>'; }).join('') + '</div>';
+    },
+    ppe: function () {
+      var p = cur.edit.ppe || {}, rs = p.rows || [];
+      var body = rs.map(function (r, i) {
+        var key = rowReg('edit.ppe.rows', i, '지급계획');
+        return '<tr>' + (i === 0 ? '<td rowspan="' + rs.length + '">' + au('근로자 명단') + '<br><br>' + au('업체명') + '</td>' : '') +
+          '<td class="l ed-c" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + nl(r.plan) + '</td><td class="ed-c" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + nl(r.note) + '</td></tr>';
+      }).join('');
+      return '<h3 class="rp-h">개인보호구</h3><p class="rp-p">□ 개인보호구 지급계획서</p><div class="rp-wrap"><table class="rt"><colgroup><col style="width:28%"><col><col style="width:24%"></colgroup>' +
+        '<tr><th>대상자</th><th>지급계획</th><th>비고</th></tr>' + body + '</table></div>' + addBtn('edit.ppe.rows', '지급계획') +
+        '<p class="rp-p">□ 개인보호구 관리·운영방안</p>' + lines('edit.ppe.mgmt', '관리·운영방안', 'ㅇ ') + addBtn('edit.ppe.mgmt', '관리·운영방안');
+    },
+    insp: function () {
+      return '<h3 class="rp-h">안전점검 계획</h3><p class="rp-p">□ 작업전 안전점검 항목 및 계획</p><div class="rp-wrap"><table class="rt"><colgroup><col style="width:18%"><col><col><col style="width:10%"></colgroup>' +
+        '<tr><th>공정</th><th>위험요소</th><th>안전점검사항</th><th>비고</th></tr>' +
+        rows('edit.inspection', '점검 공정', function (r) { return '<td>' + nl(r.proc) + '</td><td class="l">' + nl(r.risk) + '</td><td class="l">' + nl(r.check) + '</td><td>' + nl(r.note) + '</td>'; }) +
+        '</table></div>' + addBtn('edit.inspection', '점검 공정') + '<p class="rp-p">ㅇ 점검계획</p>' + lines('edit.inspectionPlan', '점검계획') + addBtn('edit.inspectionPlan', '점검계획');
+    },
+    eduRec: function () {
+      return '<h3 class="rp-h">교육실적</h3><p class="rp-p">□ 산업재해 예방 교육 실적(제설작업 관련)</p><div class="rp-wrap"><table class="rt"><tr><th>구분</th><th>대상</th><th>기준</th><th>실시</th><th>대상자</th><th>비고</th></tr>' +
+        rows('edit.eduRecord', '교육', function (r) { return '<td>' + nl(r.kind) + '</td><td>' + nl(r.target) + '</td><td>' + nl(r.std) + '</td><td>' + (r.done === 'auto' ? au('질문 답') : nl(r.done)) + '</td><td>' + au('근로자 이름') + '</td><td>' + nl(r.note) + '</td>'; }) +
+        '</table></div>' + addBtn('edit.eduRecord', '교육') +
+        '<p class="rp-p">ㅇ 사진대지</p><div class="rp-wrap"><table class="rt"><tr><td colspan="2" class="photo">' + ph('사진 (업체가 넣음)') + '</td></tr><tr><th>내 용</th>' + fld('eduLabel', '사진대지 › 내용', 'edit.eduPhotoLabel', { type: 'text' }) + '</tr></table></div>';
+    },
+    emer: function () {
+      return '<h3 class="rp-h">비 상 대 책</h3><p class="rp-p">□ 재해발생 시 행동매뉴얼 — (예시 1) 재해발생시 흐름도</p><div class="rp-wrap"><table class="rt flow"><colgroup><col style="width:26%"><col></colgroup>' +
+        rows('edit.emergencyFlow', '흐름도 단계', function (f) { return '<td class="stepbox">' + nl(f.step) + '</td><td class="l">' + nl(f.text) + '</td>'; }) +
+        '</table></div>' + addBtn('edit.emergencyFlow', '단계') + '<p class="rp-p">□ 재해발생 시 유관기관 연락망 ' + au('업체가 비상연락처 화면에서 입력') + '</p>';
+    }
+  };
+  /* 항목마다 「원본으로 되돌리기」 할 때 되돌릴 내용 */
+  var SEC_PATHS = {
+    process: ['process'], equip: ['work', 'equipment', 'chemicals', 'info'], patrol: ['patrol'], cases: ['cases'], msds: ['msds'],
+    hazard: ['hazardChecks', 'hazardEquip', 'hazardMaterial'], results: ['results', 'resultSubName'], edu: ['preEdu', 'postEdu'],
+    interviews: ['interviews'], budget: ['budget'], danger: ['dangerWork'], ppe: ['ppe'], insp: ['inspection', 'inspectionPlan'],
+    eduRec: ['eduRecord', 'eduPhotoLabel'], emer: ['emergencyFlow']
+  };
+  var showEd = false;   // 「수정할 곳 보기」 — 터치 화면처럼 마우스를 올릴 수 없을 때 수정 가능한 칸을 모두 표시
+
   function viewSettings() {
     var rv = cur.reviewed || {};
     if (!setSec) {
-      var h = '<p class="lead">항목을 누르면 보고서에 들어갈 내용이 표로 나옵니다. 바꾼 내용은 <b>모든 업체의 보고서에 똑같이</b> 들어갑니다.</p><div class="set-list">';
-      EDIT_SECS.forEach(function (s, i) {
-        var st = rv[s.id];
-        h += '<button class="set-item" data-act="setOpen" data-sec="' + s.id + '"><span class="set-no">' + (i + 1) + '</span><span class="set-t">' + esc(s.title) + '</span>' +
-          '<span class="set-st ' + (st || 'none') + '">' + (st === 'ok' ? '✔ 확인' : st === 'edited' ? '✎ 수정함' : '확인 전') + '</span></button>';
+      var h = '<p class="lead">보고서 목차 순서대로 정리했습니다. 항목을 누르면 <b>보고서의 표 모양 그대로</b> 나옵니다. 바꾼 내용은 <b>모든 업체의 보고서에 똑같이</b> 들어갑니다.</p>';
+      CHAPTERS.forEach(function (ch) {
+        h += '<section class="toc"><h3 class="toc-h"><span class="toc-no">' + ch.no + '</span>' + esc(ch.title) + '</h3>';
+        if (ch.fixed) { h += '<p class="toc-fixed">🔒 ' + esc(ch.fixed) + '</p></section>'; return; }
+        h += '<div class="set-list">';
+        ch.items.forEach(function (id, i) {
+          var no = ch.no + '-' + (i + 1);
+          if (id === '@eval') {
+            h += '<div class="set-item auto"><span class="set-no">' + no + '</span><span class="set-t">' + esc(SEC_TITLE[id]) + '<small>질문 답으로 자동으로 채워집니다</small></span><span class="set-st none">자동</span></div>';
+            return;
+          }
+          var st = rv[id];
+          h += '<button class="set-item" data-act="setOpen" data-sec="' + id + '"><span class="set-no">' + no + '</span><span class="set-t">' + esc(SEC_TITLE[id]) + '</span>' +
+            '<span class="set-st ' + (st || 'none') + '">' + (st === 'ok' ? '✔ 확인' : st === 'edited' ? '✎ 수정함' : '확인 전') + '</span></button>';
+        });
+        h += '</div></section>';
       });
-      return h + '</div><button class="btn btn-primary btn-big" data-act="home">처음 화면으로</button>';
+      return h + '<button class="btn btn-primary btn-big" data-act="home">처음 화면으로</button>';
     }
-    var sec = EDIT_SECS.filter(function (x) { return x.id === setSec; })[0];
-    if (!setEditing) {
-      return '<button class="btn btn-sm btn-ghost set-back" data-act="setBack">◀ 항목 목록</button>' +
-        '<p class="lead">아래 내용이 보고서에 들어갑니다.<br>고칠 것이 없으면 <b>「확인」</b>, 고치려면 <b>「수정」</b>을 누르세요.</p>' +
-        '<div class="vt">' + sec.table() + '</div>';
+    EDREG = {};
+    var page = PAGES[setSec]();
+    var keys = Object.keys(EDREG);
+    var legend = '<div class="ed-legend"><div class="ed-lh">✎ 이 표에서 고칠 수 있는 부분 <small>(표에서 바로 눌러도 됩니다)</small></div><div class="ed-keys">' +
+      legendKeys(keys) +
+      (setSec === 'hazard' ? '<span class="ed-note">▣/□ 칸은 누르면 바로 바뀝니다</span>' : '') + '</div>' +
+      '<div class="ed-lg"><span class="ph">회색 글씨</span> 업체가 적는 곳 · <span class="au">파란 글씨</span> 자동으로 들어가는 곳 · <span class="ed-sample">테두리</span> 고칠 수 있는 곳</div></div>';
+    return '<button class="btn btn-sm btn-ghost set-back" data-act="setBack">◀ 목차로</button>' +
+      '<div class="rp-crumb">' + esc(chapterOf(setSec)) + ' › <b>' + esc(SEC_TITLE[setSec]) + '</b></div>' +
+      '<p class="lead sm">고칠 수 있는 칸을 <b>누르면</b> 고치는 창이 뜹니다<span class="pc-only"> (마우스를 올리면 테두리가 생겨요)</span>. 고칠 것이 없으면 아래 <b>「확인」</b>을 누르세요.</p>' +
+      '<div class="rp' + (showEd ? ' show-ed' : '') + '">' + page + '</div>' + legend +
+      '<button class="btn btn-ghost btn-reset" data-act="resetSec" data-sec="' + setSec + '">↺ 이 항목을 원본 내용으로 되돌리기</button>';
+  }
+  /* 줄이 여러 개인 목록은 「조사 항목 1~20」처럼 한 칸으로 묶어 보여 줌 */
+  function legendKeys(keys) {
+    var out = [], grp = {};
+    keys.forEach(function (k) {
+      var m = /^(.*)\.(\d+)$/.exec(k), lab = EDREG[k].label;
+      if (m && /\s\d+$/.test(lab)) {
+        var base = lab.replace(/\s\d+$/, '');
+        if (!grp[m[1]]) { grp[m[1]] = { base: base, n: 0, first: k }; out.push(grp[m[1]]); }
+        grp[m[1]].n++;
+      } else out.push({ key: k });
+    });
+    return out.map(function (o) {
+      if (o.key) return '<button class="ed-key" data-act="edOpen" data-ed="' + esc(o.key) + '">' + esc(EDREG[o.key].label) + '</button>';
+      return '<span class="ed-key grp">' + esc(o.base) + (o.n > 1 ? ' 1~' + o.n : ' 1') + ' <small>표에서 고칠 줄을 누르세요</small></span>';
+    }).join('');
+  }
+  function chapterOf(id) {
+    for (var c = 0; c < CHAPTERS.length; c++) if ((CHAPTERS[c].items || []).indexOf(id) >= 0) return CHAPTERS[c].no + '. ' + CHAPTERS[c].title;
+    return '';
+  }
+
+  /* --- 수정 창(메모) --- */
+  function drawMemo() {
+    var m = document.getElementById('modal'), r = EDREG[memoKey];
+    if (!r) { memoKey = null; closeModal(); return; }
+    var old = m.querySelector('.memo-body'), st = old ? old.scrollTop : 0;
+    m.innerHTML = '<div class="memo" role="dialog" aria-label="고치기"><div class="memo-head"><div><small>' + esc(chapterOf(setSec)) + ' › ' + esc(SEC_TITLE[setSec]) + '</small><b>✎ ' + esc(r.label) + '</b></div>' +
+      '<button class="btn btn-sm btn-ghost" data-act="edCancel" aria-label="닫기">✕</button></div>' +
+      '<div class="memo-body">' + r.render() + '</div>' +
+      '<div class="memo-foot">' + (r.del ? '<button class="btn btn-danger" data-act="edDel">삭제</button>' : '') + '<span class="sp"></span>' +
+      '<button class="btn btn-ghost" data-act="edCancel">취소</button><button class="btn btn-primary" data-act="edSave">저장</button></div></div>';
+    m.hidden = false; m.classList.add('memo-on'); document.body.classList.add('noscroll');
+    var nb = m.querySelector('.memo-body'); if (nb) nb.scrollTop = st;
+  }
+  function openMemo(key, snapTaken) {
+    if (!snapTaken) memoSnap = clone(cur.edit);
+    memoKey = key; drawMemo();
+    if (window.matchMedia && window.matchMedia('(hover: hover)').matches) {
+      setTimeout(function () { var f = document.querySelector('.memo-body textarea, .memo-body input'); if (f) f.focus(); }, 30);
     }
-    return '<p class="lead">고친 뒤 아래 <b>「수정 완료」</b>를 누르세요. 「취소」를 누르면 고치기 전으로 돌아갑니다.</p>' + sec.render() +
-      '<button class="btn btn-ghost btn-reset" data-act="resetSec" data-sec="' + sec.id + '">↺ 이 부분을 원본 내용으로 되돌리기</button>';
   }
-  /* 설정 항목 보기용 표 */
-  function nl(s) { return esc(s == null ? '' : s).replace(/\n/g, '<br>'); }
-  function tb(head, rows) {
-    if (!rows.length) return '<p class="note">내용이 없습니다.</p>';
-    var wide = head.length >= 4;
-    return (wide ? '<p class="hint">↔ 표가 넓으면 옆으로 밀어서 보세요.</p>' : '') + '<div class="vt-wrap"><table class="vtab' + (wide ? ' wide' : '') + '" style="--cols:' + head.length + '"><thead><tr>' + head.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
-      rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td>' + nl(c) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
+  function closeMemo(msg) {
+    memoKey = null; memoSnap = null;
+    var m = document.getElementById('modal'); m.classList.remove('memo-on'); closeModal();
+    save(true); rerender(); if (msg) toast(msg);
   }
-  function kv(rows) { return '<div class="vt-wrap"><table class="vtab kv"><tbody>' + rows.map(function (r) { return '<tr><th>' + esc(r[0]) + '</th><td>' + nl(r[1]) + '</td></tr>'; }).join('') + '</tbody></table></div>'; }
-  function ol(list) { return list && list.length ? '<ol class="vlist">' + list.map(function (t) { return '<li>' + nl(String(t).replace(/\{Y\}/g, '(연도)')) + '</li>'; }).join('') + '</ol>' : '<p class="note">내용이 없습니다.</p>'; }
 
   /* ---------- PDF ---------- */
   var fontCache = null, pdfLibP = null, flowCache = null;
@@ -678,58 +900,18 @@
   }
 
   /* ---------- 파일로 저장 / 불러오기 ---------- */
-  /* 백업 파일은 HTML: 휴대폰에서 열면 저장된 내용을 바로 볼 수 있고, 같은 파일로 「불러오기」도 됩니다.
-   * (실제 데이터는 파일 안의 <script type="application/json" id="ra-backup"> 에 들어 있음) */
-  function backupHtml(payload) {
-    var site = location.origin + location.pathname.replace(/[^/]*$/, '');
-    var json = JSON.stringify(payload).replace(/</g, '\\u003c');
-    var cards = payload.companies.map(function (c) {
-      var i = c.info || {}, ws = (c.workers || []).filter(function (w) { return w.name; });
-      var ev = L.evalSummary(c);
-      var ph = Object.keys(c.photos || {}).map(function (k) { return '<img src="' + c.photos[k] + '" alt="">'; }).join('');
-      return '<section class="c"><h2>' + esc(i.company || '업체명 미입력') + '</h2>' +
-        '<table>' +
-        '<tr><th>계약명</th><td>' + esc(i.contract || '') + '</td></tr>' +
-        '<tr><th>대표자</th><td>' + esc(i.ceo || '') + (i.ceoPhone ? ' (' + esc(i.ceoPhone) + ')' : '') + '</td></tr>' +
-        '<tr><th>계약기간</th><td>' + esc(D.dot(i.contractStart)) + ' ~ ' + esc(D.dot(i.contractEnd)) + '</td></tr>' +
-        '<tr><th>작성일</th><td>' + esc(D.dot(i.writeDate)) + '</td></tr>' +
-        '<tr><th>근로자</th><td>' + (ws.length ? ws.map(function (w) { return esc(w.name) + (w.phone ? ' ' + esc(w.phone) : ''); }).join('<br>') : '-') + '</td></tr>' +
-        '<tr><th>평가표</th><td>' + (ev.done ? ev.total + '점 · ' + esc(ev.grade) : '질문 답하는 중') + '</td></tr>' +
-        '</table>' + (ph ? '<div class="ph">' + ph + '</div>' : '') + '</section>';
-    }).join('');
-    return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
-      '<title>위험성평가 저장 파일 (' + esc(D.dot(D.today())) + ')</title><style>' +
-      'body{margin:0;background:#eef3f7;color:#10243a;font:18px/1.55 -apple-system,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;word-break:keep-all}' +
-      'main{max-width:720px;margin:0 auto;padding:16px}' +
-      '.head{background:#1f5f8f;color:#fff;border-radius:18px;padding:20px}.head h1{margin:0 0 6px;font-size:24px}.head p{margin:0;opacity:.92}' +
-      '.how{background:#fff4d6;color:#5c3d00;border-radius:14px;padding:14px 16px;margin:14px 0}' +
-      '.how button{display:block;width:100%;margin:12px 0 4px;background:#1f5f8f;color:#fff;border:0;font:inherit;font-size:20px;font-weight:700;border-radius:14px;padding:16px;cursor:pointer}.how button:hover{background:#164a70}.how small{display:block;margin-top:8px;font-size:15px}#msg{margin:6px 0 0;font-weight:700}' +
-      '.c{background:#fff;border:1px solid #d6e1e9;border-radius:18px;padding:18px;margin:0 0 14px}.c h2{margin:0 0 10px;font-size:22px}' +
-      'table{width:100%;border-collapse:collapse}th{text-align:left;color:#4e6274;font-weight:600;width:90px;vertical-align:top;padding:6px 8px 6px 0}td{padding:6px 0;border-bottom:1px solid #eef3f7}' +
-      '.ph{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.ph img{width:100%;border-radius:10px;display:block}' +
-      '</style></head><body><main>' +
-      '<div class="head"><h1>위험성평가 저장 파일</h1><p>' + esc(D.dot(D.today())) + ' 저장 · 업체 ' + payload.companies.length + '곳</p></div>' +
-      '<div class="how"><b>이어서 작성하려면</b> 아래 파란 버튼을 누르세요. 사이트가 열리면서 이 내용이 그대로 들어갑니다.' +
-      '<button id="go" type="button">이 내용으로 이어서 작성하기 ▶</button><p id="msg"></p>' +
-      '<small>버튼이 안 되면(아이폰 파일 미리보기 등): 사이트 첫 화면 맨 아래 「파일로 저장 · 다른 기기로 옮기기」 → 「불러오기」에서 이 파일을 고르세요.</small></div>' + cards +
-      '</main><script type="application/json" id="ra-backup">' + json + '<\/script>' +
-      '<script>(function(){var SITE=' + JSON.stringify(site) + ',btn=document.getElementById("go"),msg=document.getElementById("msg"),w=null,sent=false;' +
-      'window.addEventListener("message",function(e){if(e.data==="ra-ready"&&w&&!sent){sent=true;w.postMessage({type:"ra-backup",payload:document.getElementById("ra-backup").textContent},"*");}' +
-      'if(e.data==="ra-done"){msg.textContent="사이트로 옮겼습니다. 열린 화면에서 이어서 작성하세요.";}});' +
-      'btn.onclick=function(){sent=false;msg.textContent="사이트를 여는 중…";w=window.open(SITE+"#from-file","_blank");if(!w){location.href=SITE;}};})();<\/script></body></html>';
-  }
   function exportAll() {
     Store.all().then(function (list) {
       var data = multi ? list : list.filter(function (c) { return c.id === Settings.get('currentId'); });
       if (!data.length) data = list.slice(0, 1);
       if (!data.length) { alert('저장할 내용이 아직 없습니다.'); return; }
-      var payload = { app: 'risk_assessment', v: 2, companies: data, settings: SET };
-      var blob = new Blob([backupHtml(payload)], { type: 'text/html' });
+      var payload = { app: 'risk_assessment', v: 2, savedAt: D.today(), companies: data, settings: SET };
+      var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
       var who = data.length === 1 ? (data[0].info.company || '업체') : '업체' + data.length + '곳';
       var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-      a.download = '위험성평가_저장_' + who.replace(/[\\/:*?"<>|\s]+/g, '_') + '_' + D.today().replace(/-/g, '') + '.html';
+      a.download = '위험성평가_저장_' + who.replace(/[\\/:*?"<>|\s]+/g, '_') + '_' + D.today().replace(/-/g, '') + '.json';
       document.body.appendChild(a); a.click(); a.remove();
-      toast('파일로 저장했습니다. 휴대폰의 「다운로드」 폴더를 확인하세요.');
+      toast('저장 파일을 받았습니다. 휴대폰의 「다운로드」 폴더에 있어요.');
     });
   }
   function readBackup(text) {
@@ -771,7 +953,7 @@
     return true;
   }
   function importFile() {
-    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.html,.htm,.json,text/html,application/json';
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,.html,.htm,application/json,text/html,text/plain,application/octet-stream';
     inp.onchange = function () {
       var f = inp.files[0]; if (!f) return;
       f.text().then(function (t) { return importData(readBackup(t)); })
@@ -794,25 +976,29 @@
     var act = b.dataset.act;
     switch (act) {
       case 'setMulti': multi = b.dataset.v === '1'; Settings.set('multi', multi); renderHome(); break;
-      case 'home': if (view === 'settings' && setEditing && setSnap) { Object.keys(setSnap).forEach(function (p) { cur.edit[p] = setSnap[p]; }); setSnap = null; setEditing = false; save(true); } setSec = null; goHome(); break;
+      case 'home': if (memoKey && memoSnap) { cur.edit = memoSnap; memoKey = null; memoSnap = null; document.getElementById('modal').classList.remove('memo-on'); } setSec = null; goHome(); break;
       case 'menu': stepMenu(); break;
       case 'closeModal': closeModal(); break;
       case 'goto': closeModal(); goStep(+b.dataset.i); break;
-      case 'settings': cur = SET; view = 'settings'; setSec = null; setEditing = false; render(); window.scrollTo(0, 0); break;
-      case 'setOpen': setSec = b.dataset.sec; setEditing = false; render(); window.scrollTo(0, 0); break;
-      case 'setBack': setSec = null; setEditing = false; render(); window.scrollTo(0, 0); break;
+      case 'settings': cur = SET; view = 'settings'; setSec = null; showEd = false; render(); window.scrollTo(0, 0); break;
+      case 'setOpen': setSec = b.dataset.sec; showEd = false; render(); window.scrollTo(0, 0); break;
+      case 'setBack': setSec = null; render(); window.scrollTo(0, 0); break;
       case 'setOk': cur.reviewed = cur.reviewed || {}; if (cur.reviewed[setSec] !== 'edited') cur.reviewed[setSec] = 'ok'; save(true); setSec = null; render(); window.scrollTo(0, 0); toast('확인했습니다.'); break;
-      case 'setEdit': {
-        var sc = EDIT_SECS.filter(function (x) { return x.id === setSec; })[0];
-        setSnap = {}; sc.paths.forEach(function (p) { setSnap[p] = clone(cur.edit[p]); });
-        setEditing = true; render(); window.scrollTo(0, 0); break;
+      case 'edShow': showEd = !showEd; rerender(); if (showEd) toast('테두리 친 칸을 누르면 고칠 수 있어요.'); break;
+      case 'edOpen': openMemo(b.dataset.ed); break;
+      case 'edAdd': {
+        var lp = b.dataset.path, la = getP(cur, lp), lt = ROWT[lp];
+        memoSnap = clone(cur.edit); la = getP(cur, lp);
+        la.push(lt ? clone(lt) : ''); save(); rerender();
+        openMemo(lp + '.' + (la.length - 1), true); break;
       }
-      case 'setCancel':
-        if (setSnap) Object.keys(setSnap).forEach(function (p) { cur.edit[p] = setSnap[p]; });
-        setSnap = null; setEditing = false; save(true); render(); window.scrollTo(0, 0); toast('고치기 전으로 돌렸습니다.'); break;
-      case 'setSave':
-        cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited';
-        setSnap = null; setEditing = false; save(true); setSec = null; render(); window.scrollTo(0, 0); toast('수정했습니다.'); break;
+      case 'edSave': cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; closeMemo('저장했습니다. 모든 업체 보고서에 들어갑니다.'); break;
+      case 'edCancel': if (memoSnap) cur.edit = memoSnap; closeMemo(); break;
+      case 'edDel': {
+        if (!confirm('이 줄을 지울까요?')) break;
+        var dr = EDREG[memoKey]; if (dr && dr.del) dr.del();
+        cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; closeMemo('지웠습니다.'); break;
+      }
       case 'new': cur = newCompany(); Settings.set('currentId', cur.id); save(true); goStep(0); break;
       case 'open': openCompany(b.dataset.id); break;
       case 'openWorkers': openCompany(b.dataset.id, 1); break;
@@ -829,8 +1015,13 @@
       case 'import': importFile(); break;
       case 'prev': if (stepIdx === 0) goHome(); else goStep(stepIdx - 1); break;
       case 'next': goStep(stepIdx + 1); break;
+      case 'chipAdd': {
+        var ap = b.dataset.path; customOpen[ap] = true; setP(cur, ap, ''); save(); rerender();
+        setTimeout(function () { var inp = $app.querySelector('[data-bind="' + ap + '"]'); if (inp) inp.focus(); }, 30);
+        break;
+      }
       case 'chip': {
-        var p = b.dataset.path, v = b.dataset.val;
+        var p = b.dataset.path, v = b.dataset.val; customOpen[p] = false;
         setP(cur, p, getP(cur, p) === v && /bizType|role/.test(p) ? '' : v); save(); rerender(); break;
       }
       case 'setv': setP(cur, b.dataset.path, b.dataset.json != null ? JSON.parse(b.dataset.json) : b.dataset.val); save(); rerender(); break;
@@ -889,17 +1080,17 @@
         getP(cur, b.dataset.path).splice(+b.dataset.i, 1); save(); rerender(); break;
       }
       case 'mv': { var a2 = getP(cur, b.dataset.path), i2 = +b.dataset.i, j = i2 + (+b.dataset.d); var t = a2[i2]; a2[i2] = a2[j]; a2[j] = t; save(); rerender(); break; }
-      case 'hz': { var hc = cur.edit.hazardChecks, ix = hc.indexOf(b.dataset.k); if (ix >= 0) hc.splice(ix, 1); else hc.push(b.dataset.k); save(); rerender(); break; }
+      case 'hz': { var hc = cur.edit.hazardChecks, ix = hc.indexOf(b.dataset.k); if (ix >= 0) hc.splice(ix, 1); else hc.push(b.dataset.k); if (view === 'settings') { cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; } save(); rerender(); break; }
       case 'resetSec': {
-        var sec = EDIT_SECS.filter(function (s) { return s.id === b.dataset.sec; })[0];
-        if (confirm('「' + sec.title + '」을(를) 원본 내용으로 되돌릴까요?')) { sec.paths.forEach(function (p) { cur.edit[p] = clone(T.DEFAULT_EDIT[p]); }); save(); rerender(); }
+        var rs = b.dataset.sec;
+        if (confirm('「' + SEC_TITLE[rs] + '」을(를) 원본 내용으로 되돌릴까요?')) { SEC_PATHS[rs].forEach(function (p) { cur.edit[p] = clone(T.DEFAULT_EDIT[p]); }); if (cur.reviewed) delete cur.reviewed[rs]; save(); rerender(); toast('원본 내용으로 되돌렸습니다.'); }
         break;
       }
       case 'pdf': save(true); makePdf(false); break;
       case 'pdfView': save(true); makePdf(true); break;
     }
   });
-  function rerender() { var y = window.scrollY; render(); window.scrollTo(0, y); }
+  function rerender() { var y = window.scrollY; render(); window.scrollTo(0, y); if (memoKey && view === 'settings') drawMemo(); }
 
   document.addEventListener('toggle', function (e) {
     var d = e.target; if (!d.matches || !d.matches('details.sec-box')) return;

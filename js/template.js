@@ -389,5 +389,37 @@
     ]
   };
 
-  g.TPL = { FIXED: FIXED, DEFAULT_EDIT: DEFAULT_EDIT };
+  /* 예전 모양(공정 1개)을 새 모양(공정 목록 + 공정마다 표)으로 바꿈. 여러 번 불러도 괜찮음 */
+  function upgradeEdit(e) {
+    if (!e) return e;
+    var cp = function (o) { return o == null ? o : JSON.parse(JSON.stringify(o)); };
+    if (!Array.isArray(e.processes) && (e.process || e.work || e.equipment || e.hazardChecks || e.results)) {
+      var P = e.process || {}, info = e.info || {};
+      var nm = P.name || e.work || '제설작업';
+      e.processes = [{ id: 'p1', name: nm, desc: P.desc || '', equip: P.equip || '', material: P.material == null ? '-' : P.material }];
+      if (!Array.isArray(e.infoTables) && (e.equipment || e.chemicals || info.heavy)) {
+        e.infoTables = [{ proc: 'p1', equipment: cp(e.equipment) || [], chemicals: cp(e.chemicals) || [],
+          heavy: cp(info.heavy) || { unit: '', lift: false, push: false, pull: false, none: true }, envMeasure: info.envMeasure || 'none' }];
+      }
+      if (!Array.isArray(e.hazardTables) && e.hazardChecks) {
+        e.hazardTables = [{ proc: 'p1', sub: e.resultSubName || nm, checks: cp(e.hazardChecks) || [], equip: e.hazardEquip || '-', material: e.hazardMaterial || '-' }];
+      }
+      if (!Array.isArray(e.resultTables) && e.results) {
+        e.resultTables = [{ proc: 'p1', sub: e.resultSubName || nm, rows: cp(e.results) || [] }];
+      }
+    }
+    ['process', 'work', 'equipment', 'chemicals', 'hazardChecks', 'hazardEquip', 'hazardMaterial', 'results', 'resultSubName'].forEach(function (k) { delete e[k]; });
+    if (e.info) { delete e.info.heavy; delete e.info.envMeasure; }
+    /* 지워진 공정을 가리키는 표는 첫 공정으로 */
+    if (e.processes && e.processes.length) {
+      var ids = e.processes.map(function (p) { return p.id; });
+      ['infoTables', 'hazardTables', 'resultTables'].forEach(function (k) {
+        (e[k] || []).forEach(function (t) { if (ids.indexOf(t.proc) < 0) t.proc = ids[0]; });
+      });
+    }
+    return e;
+  }
+  upgradeEdit(DEFAULT_EDIT);
+
+  g.TPL = { FIXED: FIXED, DEFAULT_EDIT: DEFAULT_EDIT, upgradeEdit: upgradeEdit };
 })(window);

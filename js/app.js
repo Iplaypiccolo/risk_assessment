@@ -82,7 +82,9 @@
   function migrateSet(s) {
     s = s || { id: '__settings__' };
     s.id = '__settings__'; s.edit = s.edit || {}; s.reviewed = s.reviewed || {};
+    T.upgradeEdit(s.edit);
     Object.keys(T.DEFAULT_EDIT).forEach(function (k) { if (s.edit[k] === undefined) s.edit[k] = clone(T.DEFAULT_EDIT[k]); });
+    T.upgradeEdit(s.edit);
     return s;
   }
   function E() { return (SET && SET.edit) || T.DEFAULT_EDIT; }
@@ -143,7 +145,7 @@
         bp.textContent = showEd ? '✎ 표시 끄기' : '✎ 수정할 곳 보기'; bp.dataset.act = 'edShow';
         bn.textContent = '확인 ✔'; bn.dataset.act = 'setOk';
       }
-      $app.innerHTML = viewSettings(); return;
+      $app.innerHTML = viewSettings(); fitTables(); return;
     }
     bp.dataset.act = 'prev'; bn.dataset.act = 'next';
     var st = STEPS[stepIdx];
@@ -483,8 +485,9 @@
     'edit.patrol': [{ k: 'text', l: '유해·위험 작업', t: 'area' }, { k: 'type', l: '사고·질병의 유형', list: null }],
     'edit.cases': [{ k: 'kind', l: '구분' }, { k: 'year', l: '연도', num: 1 }, { k: 'org', l: '기관명' }, { k: 'text', l: '사고내용', t: 'area' }, { k: 'note', l: '비고' }],
     'edit.msds': [{ k: 'name', l: '물질명' }, { k: 'cas', l: 'CAS No.' }, { k: 'use', l: '사용량(ℓ·㎏/일)' }, { k: 'store', l: '저장량(ℓ·㎏/일)' }, { k: 'purpose', l: '용도' }],
-    'edit.equipment': [{ k: 'name', l: '설비명' }, { k: 'qty', l: '수량' }],
-    'edit.chemicals': [{ k: 'name', l: '화학물질명' }, { k: 'amount', l: '취급량(일)' }, { k: 'time', l: '취급시간' }],
+    'edit.infoTables.equipment': [{ k: 'name', l: '설비명' }, { k: 'qty', l: '수량' }],
+    'edit.infoTables.chemicals': [{ k: 'name', l: '화학물질명' }, { k: 'amount', l: '취급량(일)' }, { k: 'time', l: '취급시간' }],
+    'edit.processes': [{ k: 'name', l: '공정명' }, { k: 'desc', l: '공정설명', t: 'area' }, { k: 'equip', l: '설비', t: 'area' }, { k: 'material', l: '물질' }],
     'edit.interviews': [{ k: 'work', l: '대상공종' }, { k: 'opinion', l: '근로자 의견', t: 'area' }, { k: 'reply', l: '위험성평가 담당자 의견', t: 'area' }],
     'edit.budget': [{ k: 'item', l: '항목 (「-」로 시작하면 금액을 적는 줄, 아니면 제목줄)' }],
     'edit.dangerWork': [{ k: 'work', l: '작업내용' }, { k: 'place', l: '위치' }, { k: 'detail', l: '세부 공종 예시', t: 'area' }, { k: 'yes', l: '해당 여부', bool: 1 }],
@@ -495,13 +498,15 @@
   };
   var ROWT = {
     'edit.patrol': { text: '', type: '' }, 'edit.cases': { kind: '부상', year: '', org: '', text: '', note: '' },
-    'edit.msds': { name: '', cas: '-', use: '', store: '', purpose: '' }, 'edit.equipment': { name: '', qty: '1대' }, 'edit.chemicals': { name: '', amount: '', time: '' },
+    'edit.msds': { name: '', cas: '-', use: '', store: '', purpose: '' }, 'edit.infoTables.equipment': { name: '', qty: '1대' }, 'edit.infoTables.chemicals': { name: '', amount: '', time: '' },
+    'edit.processes': { id: '', name: '', desc: '', equip: '', material: '-' },
     'edit.interviews': { work: '', opinion: '', reply: '', worker: 0 }, 'edit.budget': { item: '- ', amount: '' },
     'edit.dangerWork': { work: '', place: '', detail: '', yes: true }, 'edit.ppe.rows': { plan: '', note: '' },
     'edit.inspection': { proc: '', risk: '· ', check: '· ', note: '' }, 'edit.eduRecord': { kind: '', target: '근로자', std: '-', done: 'O', note: '' },
     'edit.emergencyFlow': { step: '', text: '▪ ' },
-    'edit.results': { task: '', cls: '1. 기계설비적요인', situation: '', measure: '', cases: '', p: 1, s: 2, redNo: '', redText: '', after: '', plan: '', done: '', owner: '' }
+    'edit.resultTables.rows': { task: '', cls: '1. 기계설비적요인', situation: '', measure: '', cases: '', p: 1, s: 2, redNo: '', redText: '', after: '', plan: '', done: '', owner: '' }
   };
+  function norm(path) { return path.replace(/\.\d+\./g, '.'); }   // edit.resultTables.0.rows → edit.resultTables.rows
   function fieldFor(p, f, it) {
     if (f.bool) {
       var on = !!it[f.k];
@@ -525,19 +530,61 @@
     var key = listPath + '.' + i;
     return reg(key, label + ' ' + (i + 1), function () {
       var it = getP(cur, listPath)[i] || {};
-      if (listPath === 'edit.results') return resultRowFields(i);
-      return (ROWF[listPath] || []).map(function (f) { return fieldFor(key + '.' + f.k, f, it); }).join('');
-    }, function () { getP(cur, listPath).splice(i, 1); });
+      if (/^edit\.resultTables\.\d+\.rows$/.test(listPath)) return resultRowFields(listPath, i);
+      return (ROWF[norm(listPath)] || []).map(function (f) { return fieldFor(key + '.' + f.k, f, it); }).join('');
+    }, canDel(listPath) ? function () { return delRow(listPath, i, true); } : null);
   }
   function lineReg(listPath, i, label) {
     var key = listPath + '.' + i;
-    return reg(key, label + ' ' + (i + 1), function () { return field(label, key, { type: 'area', rows: 3 }); }, function () { getP(cur, listPath).splice(i, 1); });
+    return reg(key, label + ' ' + (i + 1), function () { return field(label, key, { type: 'area', rows: 3 }); }, canDel(listPath) ? function () { return delRow(listPath, i, true); } : null);
   }
+  /* 마지막 1줄은 지우지 못함 (보고서에 빈 표가 나오지 않게) */
+  function canDel(listPath) { return (getP(cur, listPath) || []).length > 1; }
+  function rowX(listPath, i) { return canDel(listPath) ? '<button type="button" class="row-x" data-act="rowDel" data-path="' + listPath + '" data-i="' + i + '" title="이 줄 지우기" aria-label="이 줄 지우기">✕</button>' : ''; }
+  /* 줄 지우기. asked=true면 이미 물어봤음 */
+  function delRow(listPath, i, asked) {
+    var arr = getP(cur, listPath);
+    if (!arr || arr.length <= 1) return false;
+    if (listPath === 'edit.processes') {
+      var id = arr[i].id, n = 0;
+      Object.keys(TBL).forEach(function (k) { (cur.edit[TBL[k].path] || []).forEach(function (t) { if (t.proc === id) n++; }); });
+      if (!confirm('「' + (arr[i].name || '공정 ' + (i + 1)) + '」 공정을 지울까요?' + (n ? '\n이 공정으로 만든 표 ' + n + '개(위험정보·유해위험요인 분류·결과서)도 함께 지워집니다.' : ''))) return false;
+      arr.splice(i, 1);
+      Object.keys(TBL).forEach(function (k) {
+        var list = cur.edit[TBL[k].path] || [], left = list.filter(function (t) { return t.proc !== id; });
+        if (left.length) cur.edit[TBL[k].path] = left;   // 표가 하나도 안 남으면 지우지 않고 남은 공정으로 옮김
+      });
+      T.upgradeEdit(cur.edit);
+      return true;
+    }
+    if (!asked && !confirm('이 줄을 지울까요?')) return false;
+    arr.splice(i, 1);
+    return true;
+  }
+  /* 공정마다 하나씩 있는 표 (2-2, 2-6, 2-7) */
+  var TBL = {
+    info: { path: 'infoTables', name: '안전·보건상 위험정보', tmpl: function () { return { proc: '', equipment: [{ name: '', qty: '' }], chemicals: [{ name: '-', amount: '-', time: '-' }], heavy: { unit: '', lift: false, push: false, pull: false, none: true }, envMeasure: 'none' }; } },
+    hazard: { path: 'hazardTables', name: '유해위험요인 분류', tmpl: function () { return { proc: '', sub: '', checks: [], equip: '-', material: '-' }; } },
+    result: { path: 'resultTables', name: '위험성평가 결과서', tmpl: function () { return { proc: '', sub: '', rows: [clone(ROWT['edit.resultTables.rows'])] }; } }
+  };
+  function procName(id) { var ps = cur.edit.processes || []; for (var i = 0; i < ps.length; i++) if (ps[i].id === id) return ps[i].name; return ps[0] ? ps[0].name : ''; }
+  function tblBar(kind, t) {
+    var n = (cur.edit[TBL[kind].path] || []).length;
+    return '<div class="tbl-bar"><span>' + esc(TBL[kind].name) + ' <b>' + (t + 1) + '</b> · ' + esc(procName(cur.edit[TBL[kind].path][t].proc) || '공정 미선택') + '</span>' +
+      (n > 1 ? '<button type="button" class="tbl-x" data-act="tblDel" data-kind="' + kind + '" data-t="' + t + '" title="이 표 지우기" aria-label="이 표 지우기">✕</button>' : '') + '</div>';
+  }
+  function procCell(kind, t, attrs) {
+    var p = 'edit.' + TBL[kind].path + '.' + t + '.proc', it = cur.edit[TBL[kind].path][t];
+    return cell('td', kind + '.' + t + '.proc', '공정 고르기', nl(procName(it.proc)) || '<span class="ph">(공정 고르기)</span>', attrs, function () {
+      return fieldFor(p, { k: 'proc', l: '이 표의 공정 (2-1 사업장 개요에 적은 공정 중에서)', pick: (cur.edit.processes || []).map(function (x, i) { return [x.id, (i + 1) + '. ' + (x.name || '(이름 없음)')]; }) }, cur.edit[TBL[kind].path][t]);
+    });
+  }
+  function tblAddBtn(kind) { return '<button class="btn btn-ghost rp-addtbl" data-act="tblAdd" data-kind="' + kind + '">＋ 표 추가</button>'; }
   function addBtn(listPath, noun) { return '<button class="btn btn-sm btn-ghost rp-add" data-act="edAdd" data-path="' + listPath + '">＋ ' + noun + ' 추가</button>'; }
   function ph(t) { return '<span class="ph">' + esc(t || '업체 입력') + '</span>'; }
   function au(t) { return '<span class="au">' + esc(t) + '</span>'; }
-  function resultRowFields(i) {
-    var r = cur.edit.results[i] || {}, p = 'edit.results.' + i, rv = (+r.p || 0) * (+r.s || 0), lv = rv >= 6 ? '높음' : rv === 4 ? '보통' : rv ? '낮음' : '';
+  function resultRowFields(listPath, i) {
+    var r = getP(cur, listPath)[i] || {}, p = listPath + '.' + i, rv = (+r.p || 0) * (+r.s || 0), lv = rv >= 6 ? '높음' : rv === 4 ? '보통' : rv ? '낮음' : '';
     return field('세부작업', p + '.task') + field('위험분류', p + '.cls', { chips: CLS_TYPES }) +
       field('유해·위험 상황 및 결과', p + '.situation', { type: 'area' }) + field('현재 안전보건조치', p + '.measure', { type: 'area', rows: 4 }) +
       field('재해사례', p + '.cases') +
@@ -551,13 +598,15 @@
   function rows(listPath, label, cellsFn) {
     return (getP(cur, listPath) || []).map(function (it, i) {
       var key = rowReg(listPath, i, label);
-      return '<tr class="ed-row" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + cellsFn(it, i) + '</tr>';
+      var cells = cellsFn(it, i), at = cells.lastIndexOf('</td>');
+      if (at >= 0) cells = cells.slice(0, at) + rowX(listPath, i) + cells.slice(at);
+      return '<tr class="ed-row" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + cells + '</tr>';
     }).join('');
   }
   function lines(listPath, label, prefix) {
     return (getP(cur, listPath) || []).map(function (t, i) {
       var key = lineReg(listPath, i, label);
-      return '<div' + edAttr(key) + '>' + (prefix || '') + nl(String(t).replace(/\{Y\}/g, String(new Date().getFullYear()))) + '</div>';
+      return '<div' + edAttr(key) + '>' + (prefix || '') + nl(String(t).replace(/\{Y\}/g, String(new Date().getFullYear()))) + rowX(listPath, i) + '</div>';
     }).join('');
   }
   function orgHtml() {
@@ -567,7 +616,6 @@
   /* --- 항목별 보고서 모양 --- */
   var PAGES = {
     process: function () {
-      var E = cur.edit, P = E.process || {};
       return '<h3 class="rp-h">1. 사업장 개요</h3><div class="rp-wrap"><table class="rt">' +
         '<colgroup><col style="width:9%"><col style="width:14%"><col style="width:13%"><col style="width:10%"><col style="width:14%"><col style="width:13%"><col style="width:9%"><col style="width:9%"><col style="width:9%"></colgroup>' +
         '<tr><th colspan="2">사업장명</th><td colspan="3">' + ph() + '</td><th colspan="2">사업주명</th><td colspan="2">' + ph() + '</td></tr>' +
@@ -576,43 +624,40 @@
         '<tr><th colspan="2" class="top">조직도</th><td colspan="7">' + orgHtml() + '</td></tr>' +
         '<tr><th colspan="9">공정분석</th></tr>' +
         '<tr><th>No.</th><th colspan="2">공정명</th><th>대상</th><th colspan="2">공정설명</th><th colspan="2">설비</th><th>물질</th></tr>' +
-        '<tr class="c"><td>1</td>' + fld('process.name', '공정분석 › 공정명', 'edit.process.name', { attrs: ' colspan="2"', type: 'text' }) + '<td>' + au('근로자 이름') + '</td>' +
-        fld('process.desc', '공정분석 › 공정설명', 'edit.process.desc', { attrs: ' colspan="2"' }) + fld('process.equip', '공정분석 › 설비', 'edit.process.equip', { attrs: ' colspan="2"' }) +
-        fld('process.material', '공정분석 › 물질', 'edit.process.material', { type: 'text' }) + '</tr></table></div>';
+        rows('edit.processes', '공정', function (P, i) {
+          return '<td>' + (i + 1) + '</td><td colspan="2">' + nl(P.name) + '</td><td>' + au('근로자 이름') + '</td><td colspan="2">' + nl(P.desc) + '</td><td colspan="2">' + nl(P.equip) + '</td><td>' + nl(P.material) + '</td>';
+        }) + '</table></div>' + addBtn('edit.processes', '공정');
     },
     equip: function () {
-      var E = cur.edit, i = E.info || {}, hv = i.heavy || {}, ck = function (b) { return b ? '■' : '□'; };
-      var eqKey = reg('equip.list', '기계·기구 및 설비 목록', function () { return listEditor('edit.equipment', ROWF['edit.equipment'], ROWT['edit.equipment'], '설비'); });
-      var chKey = reg('chem.list', '유해화학물질 목록', function () { return listEditor('edit.chemicals', ROWF['edit.chemicals'], ROWT['edit.chemicals'], '화학물질'); });
-      var hvKey = reg('heavy', '중량물 인력 취급', function () {
-        var h2 = cur.edit.info.heavy;
-        return field('단위 중량', 'edit.info.heavy.unit', { type: 'text' }) + '<div class="field"><span class="lab">취급형태</span><div class="chips">' +
-          [['lift', '들기'], ['push', '밀기'], ['pull', '끌기'], ['none', '해당무']].map(function (o) { return '<button class="chip' + (h2[o[0]] ? ' on' : '') + '" data-act="toggle" data-path="edit.info.heavy.' + o[0] + '">' + (h2[o[0]] ? '■ ' : '□ ') + o[1] + '</button>'; }).join('') + '</div></div>';
-      });
-      var envKey = reg('env', '작업환경측정', function () { return field('작업환경측정', 'edit.info.envMeasure', { chips: [['yes', '측정'], ['no', '미측정'], ['none', '해당무']], noInput: 1 }); });
-      var eq = E.equipment || [], ch = E.chemicals || [];
-      var env = i.envMeasure || 'none';
-      var other = [
-        '○ 작업표준, 작업절차에 관한 정보', '- 안전보건경영시스템(KOSHA-MS) 메뉴얼', '○ 기계·기구 및 설비의 사양서, 물질안전보건자료 등의 유해·위험요인에 관한 정보', '- MSDS자료 참조[별도첨부]',
-        '○ 기계·기구 및 설비의 공정흐름과 작업주변의 환경에 관한 정보', '- 안전보건경영시스템(KOSHA-MS) 메뉴얼'
-      ].map(function (t) { return '<div>' + esc(t) + '</div>'; }).join('') +
-        '<div>○ 도급(일부, 전부 또는 혼재작업) ' + au('질문 답') + '</div><div>○ 재해사례, 재해통계 등에 관한 정보</div><div>- 재해사례 및 재해통계 정보조사 참조</div>' +
-        '<div>○ 안전작업허가증 필요작업 ' + au('질문 답') + '</div>' +
-        '<div' + edAttr(hvKey) + '>○ 중량물 인력 취급 시 단위 중량(' + esc(hv.unit || '') + ') 및 취급형태<br>(들기' + ck(hv.lift) + ', 밀기' + ck(hv.push) + ', 끌기' + ck(hv.pull) + ', 해당무' + ck(hv.none) + ')</div>' +
-        '<div' + edAttr(envKey) + '>○ 작업환경측정 유무(측정' + ck(env === 'yes') + ', 미측정' + ck(env === 'no') + ', 해당무' + ck(env === 'none') + ')</div>' +
-        '<div>○ 근로자 건강진단 유무 ' + au('질문 답') + '</div><div>○ 근로자 구성 및 경력특성 ' + au('근로자 화면에서 선택') + '</div><div>○ 그 밖에 위험성평가에 참고가 되는 자료 등</div>';
-      return '<div class="rp-wrap"><table class="rt wide">' +
-        '<tr><th>작업</th>' + fld('work', '작업 이름', 'edit.work', { type: 'text' }) + '<td colspan="5" rowspan="2" class="ttl">안전ㆍ보건상 위험정보</td><th>근로자수</th><td>' + au('자동') + '</td></tr>' +
-        '<tr><th>평가일시</th><td>' + au('작성일') + '</td><th>평가자</th><td>' + au('대표자') + '</td></tr>' +
-        '<tr><th rowspan="2">공정</th><th colspan="2">기계 ･ 기구 및 설비</th><th colspan="3">유 해 화 학 물 질</th><th colspan="3" rowspan="2">기타 안전ㆍ보건상 정보</th></tr>' +
-        '<tr><th>설 비 명</th><th>수량</th><th>화학물질명</th><th>취급량(일)</th><th>취급시간</th></tr>' +
-        '<tr class="c"><td>' + nl(E.work) + '</td>' +
-        '<td' + edAttr(eqKey) + '>' + eq.map(function (e) { return esc(e.name); }).join('<br>') + '</td>' +
-        '<td' + edAttr(eqKey) + '>' + eq.map(function (e) { return esc(e.qty); }).join('<br>') + '</td>' +
-        '<td' + edAttr(chKey) + '>' + ch.map(function (e) { return esc(e.name); }).join('<br>') + '</td>' +
-        '<td' + edAttr(chKey) + '>' + ch.map(function (e) { return esc(e.amount); }).join('<br>') + '</td>' +
-        '<td' + edAttr(chKey) + '>' + ch.map(function (e) { return esc(e.time); }).join('<br>') + '</td>' +
-        '<td colspan="3" class="l sm">' + other + '</td></tr></table></div>';
+      return (cur.edit.infoTables || []).map(function (IT, t) {
+        var base = 'edit.infoTables.' + t, ck = function (b) { return b ? '■' : '□'; }, hv = IT.heavy || {}, env = IT.envMeasure || 'none';
+        var eqKey = reg('info.' + t + '.eq', '기계·기구 및 설비 목록', function () { return listEditor(base + '.equipment', ROWF['edit.infoTables.equipment'], ROWT['edit.infoTables.equipment'], '설비'); });
+        var chKey = reg('info.' + t + '.ch', '유해화학물질 목록', function () { return listEditor(base + '.chemicals', ROWF['edit.infoTables.chemicals'], ROWT['edit.infoTables.chemicals'], '화학물질'); });
+        var hvKey = reg('info.' + t + '.heavy', '중량물 인력 취급', function () {
+          var h2 = cur.edit.infoTables[t].heavy || (cur.edit.infoTables[t].heavy = {});
+          return field('단위 중량', base + '.heavy.unit', { type: 'text' }) + '<div class="field"><span class="lab">취급형태</span><div class="chips">' +
+            [['lift', '들기'], ['push', '밀기'], ['pull', '끌기'], ['none', '해당무']].map(function (o) { return '<button class="chip' + (h2[o[0]] ? ' on' : '') + '" data-act="toggle" data-path="' + base + '.heavy.' + o[0] + '">' + (h2[o[0]] ? '■ ' : '□ ') + o[1] + '</button>'; }).join('') + '</div></div>';
+        });
+        var envKey = reg('info.' + t + '.env', '작업환경측정', function () { return field('작업환경측정', base + '.envMeasure', { chips: [['yes', '측정'], ['no', '미측정'], ['none', '해당무']], noInput: 1 }); });
+        var eq = IT.equipment || [], ch = IT.chemicals || [];
+        var other = [
+          '○ 작업표준, 작업절차에 관한 정보', '- 안전보건경영시스템(KOSHA-MS) 메뉴얼', '○ 기계·기구 및 설비의 사양서, 물질안전보건자료 등의 유해·위험요인에 관한 정보', '- MSDS자료 참조[별도첨부]',
+          '○ 기계·기구 및 설비의 공정흐름과 작업주변의 환경에 관한 정보', '- 안전보건경영시스템(KOSHA-MS) 메뉴얼'
+        ].map(function (x) { return '<div>' + esc(x) + '</div>'; }).join('') +
+          '<div>○ 도급(일부, 전부 또는 혼재작업) ' + au('질문 답') + '</div><div>○ 재해사례, 재해통계 등에 관한 정보</div><div>- 재해사례 및 재해통계 정보조사 참조</div>' +
+          '<div>○ 안전작업허가증 필요작업 ' + au('질문 답') + '</div>' +
+          '<div' + edAttr(hvKey) + '>○ 중량물 인력 취급 시 단위 중량(' + esc(hv.unit || '') + ') 및 취급형태<br>(들기' + ck(hv.lift) + ', 밀기' + ck(hv.push) + ', 끌기' + ck(hv.pull) + ', 해당무' + ck(hv.none) + ')</div>' +
+          '<div' + edAttr(envKey) + '>○ 작업환경측정 유무(측정' + ck(env === 'yes') + ', 미측정' + ck(env === 'no') + ', 해당무' + ck(env === 'none') + ')</div>' +
+          '<div>○ 근로자 건강진단 유무 ' + au('질문 답') + '</div><div>○ 근로자 구성 및 경력특성 ' + au('근로자 화면에서 선택') + '</div><div>○ 그 밖에 위험성평가에 참고가 되는 자료 등</div>';
+        var list = function (key, arr, k) { return '<td' + edAttr(key) + '>' + arr.map(function (e) { return esc(e[k]); }).join('<br>') + '</td>'; };
+        return '<div class="tbl">' + tblBar('info', t) + '<div class="rp-wrap"><table class="rt wide">' +
+          '<tr><th>작업</th>' + procCell('info', t) + '<td colspan="5" rowspan="2" class="ttl">안전ㆍ보건상 위험정보</td><th>근로자수</th><td>' + au('자동') + '</td></tr>' +
+          '<tr><th>평가일시</th><td>' + au('작성일') + '</td><th>평가자</th><td>' + au('대표자') + '</td></tr>' +
+          '<tr><th rowspan="2">공정</th><th colspan="2">기계 ･ 기구 및 설비</th><th colspan="3">유 해 화 학 물 질</th><th colspan="3" rowspan="2">기타 안전ㆍ보건상 정보</th></tr>' +
+          '<tr><th>설 비 명</th><th>수량</th><th>화학물질명</th><th>취급량(일)</th><th>취급시간</th></tr>' +
+          '<tr class="c">' + procCell('info', t) + list(eqKey, eq, 'name') + list(eqKey, eq, 'qty') + list(chKey, ch, 'name') + list(chKey, ch, 'amount') + list(chKey, ch, 'time') +
+          '<td colspan="3" class="l sm">' + other + '</td></tr></table></div></div>';
+      }).join('') + tblAddBtn('info');
     },
     patrol: function () {
       return '<div class="rp-wrap"><table class="rt">' +
@@ -628,7 +673,7 @@
     },
     cases: function () {
       return '<div class="rp-title orange">재해사례, 재해통계<br>정보 조사</div>' +
-        '<p class="rp-p">□ 공종명 : ' + nl(cur.edit.work) + '</p><p class="rp-p">□ 재해통계 ' + au('질문 답으로 자동') + '</p>' +
+        '<p class="rp-p">□ 공종명 : ' + esc((cur.edit.processes || []).map(function (x) { return x.name; }).filter(Boolean).join(', ')) + '</p><p class="rp-p">□ 재해통계 ' + au('질문 답으로 자동') + '</p>' +
         '<div class="rp-wrap"><table class="rt"><tr><th>사 고</th><th>사망(명)</th><th>부상(명)</th><th>비고</th></tr><tr class="c"><td>' + au('자동') + '</td><td>' + au('자동') + '</td><td>' + au('자동') + '</td><td></td></tr></table></div>' +
         '<p class="rp-p">□ 유사사례</p><div class="rp-wrap"><table class="rt"><colgroup><col style="width:10%"><col style="width:9%"><col style="width:22%"><col><col style="width:10%"></colgroup>' +
         '<tr><th>구분</th><th>연도</th><th>기관명</th><th>사고내용</th><th>비고</th></tr>' +
@@ -642,34 +687,39 @@
         '<tr><td colspan="6" class="note-row">…빈 줄은 보고서에서 22번까지 자동으로 채워집니다</td></tr></table></div>' + addBtn('edit.msds', '물질');
     },
     hazard: function () {
-      var E = cur.edit, set = {}; (E.hazardChecks || []).forEach(function (k) { set[k] = 1; });
-      var h = '<div class="rp-wrap"><table class="rt hz"><tr><th colspan="11" class="ttl2">유해위험요인 분류</th></tr>' +
-        '<tr><th>공 정</th><td>' + nl(E.work) + '</td><th colspan="2">세부 분류</th><td>' + nl(E.resultSubName || E.work) + '</td><th colspan="2">설비</th>' + fld('hz.equip', '유해위험요인 분류 › 설비', 'edit.hazardEquip', { type: 'text' }) + '<th colspan="2">물질</th>' + fld('hz.mat', '유해위험요인 분류 › 물질', 'edit.hazardMaterial', { type: 'text' }) + '</tr>';
-      T.FIXED.hazardGroups.forEach(function (g) {
-        var n = Math.ceil(g.items.length / 3);
-        for (var r = 0; r < n; r++) {
-          h += '<tr>' + (r === 0 ? '<td rowspan="' + n + '">' + g.no + '</td><td rowspan="' + n + '">' + esc(g.name) + '</td>' : '');
-          for (var k = 0; k < 3; k++) {
-            var it = g.items[r * 3 + k];
-            if (it) h += '<td class="ed ck" data-act="hz" data-k="' + it[0] + '" title="눌러서 해당/해당 없음 바꾸기">' + (set[it[0]] ? '▣' : '□') + '</td><td>' + it[0] + '</td><td class="l">' + esc(it[1]) + '</td>';
-            else h += '<td></td><td></td><td></td>';
+      return (cur.edit.hazardTables || []).map(function (HT, t) {
+        var base = 'edit.hazardTables.' + t, set = {}; (HT.checks || []).forEach(function (k) { set[k] = 1; });
+        var h = '<div class="tbl">' + tblBar('hazard', t) + '<div class="rp-wrap"><table class="rt hz"><tr><th colspan="11" class="ttl2">유해위험요인 분류</th></tr>' +
+          '<tr><th>공 정</th>' + procCell('hazard', t) + '<th colspan="2">세부 분류</th>' + fld('hazard.' + t + '.sub', '세부 분류', base + '.sub', { type: 'text' }) +
+          '<th colspan="2">설비</th>' + fld('hazard.' + t + '.equip', '설비', base + '.equip', { type: 'text' }) + '<th colspan="2">물질</th>' + fld('hazard.' + t + '.mat', '물질', base + '.material', { type: 'text' }) + '</tr>';
+        T.FIXED.hazardGroups.forEach(function (g) {
+          var n = Math.ceil(g.items.length / 3);
+          for (var r = 0; r < n; r++) {
+            h += '<tr>' + (r === 0 ? '<td rowspan="' + n + '">' + g.no + '</td><td rowspan="' + n + '">' + esc(g.name) + '</td>' : '');
+            for (var k = 0; k < 3; k++) {
+              var it = g.items[r * 3 + k];
+              if (it) h += '<td class="ed ck" data-act="hz" data-t="' + t + '" data-k="' + it[0] + '" title="눌러서 해당/해당 없음 바꾸기">' + (set[it[0]] ? '▣' : '□') + '</td><td>' + it[0] + '</td><td class="l">' + esc(it[1]) + '</td>';
+              else h += '<td></td><td></td><td></td>';
+            }
+            h += '</tr>';
           }
-          h += '</tr>';
-        }
-      });
-      return h + '</table></div><p class="hint">▣/□ 칸을 누르면 바로 바뀝니다.</p>';
+        });
+        return h + '</table></div></div>';
+      }).join('') + tblAddBtn('hazard');
     },
     results: function () {
-      var E = cur.edit;
-      return '<div class="rp-wrap"><table class="rt wide res">' +
-        '<tr><th colspan="2" class="g">공정명</th>' + fld('work2', '공정명', 'edit.work', { attrs: ' colspan="2"', type: 'text' }) + '<td colspan="6" rowspan="2" class="ttl green">위험성평가 결과서</td><th colspan="2" class="g">평가일자</th><td colspan="2">' + au('작성일') + '</td></tr>' +
-        '<tr><th colspan="2" class="g">세부공정명</th>' + fld('subname', '세부공정명', 'edit.resultSubName', { attrs: ' colspan="2"', type: 'text' }) + '<th colspan="2" class="g">평 가 자</th><td colspan="2">' + au('대표자') + '</td></tr>' +
-        '<tr><th rowspan="2" class="g">세부작업</th><th colspan="2" class="g">유해위험요인 파악</th><th rowspan="2" class="g">현재 안전보건조치</th><th rowspan="2" class="g">재해사례</th><th colspan="3" class="g">현재 위험성</th><th colspan="2" class="g">감소대책</th><th rowspan="2" class="g">개선후<br>위험성</th><th rowspan="2" class="g">개선<br>예정일</th><th rowspan="2" class="g">완료일</th><th rowspan="2" class="g">담당자</th></tr>' +
-        '<tr><th class="g">위험분류</th><th class="g">유해・위험 상황 및 결과</th><th class="g">가능성</th><th class="g">중대성</th><th class="g">위험성</th><th class="g">NO</th><th class="g">세부내용</th></tr>' +
-        rows('edit.results', '위험요인', function (r) {
-          var v = (+r.p || 0) * (+r.s || 0);
-          return '<td>' + nl(r.task) + '</td><td>' + nl(r.cls) + '</td><td class="l">' + nl(r.situation) + '</td><td class="l">' + nl(r.measure) + '</td><td>' + nl(r.cases) + '</td><td>' + (r.p || '') + '</td><td>' + (r.s || '') + '</td><td>' + (v ? v + '<br>(' + (v >= 6 ? '높음' : v === 4 ? '보통' : '낮음') + ')' : '') + '</td><td>' + nl(r.redNo) + '</td><td class="l">' + nl(r.redText) + '</td><td>' + nl(r.after) + '</td><td>' + nl(r.plan) + '</td><td>' + nl(r.done) + '</td><td>' + nl(r.owner) + '</td>';
-        }) + '</table></div>' + addBtn('edit.results', '위험요인');
+      return (cur.edit.resultTables || []).map(function (RT, t) {
+        var base = 'edit.resultTables.' + t;
+        return '<div class="tbl">' + tblBar('result', t) + '<div class="rp-wrap"><table class="rt wide res">' +
+          '<tr><th colspan="2" class="g">공정명</th>' + procCell('result', t, ' colspan="2"') + '<td colspan="6" rowspan="2" class="ttl green">위험성평가 결과서</td><th colspan="2" class="g">평가일자</th><td colspan="2">' + au('작성일') + '</td></tr>' +
+          '<tr><th colspan="2" class="g">세부공정명</th>' + fld('result.' + t + '.sub', '세부공정명', base + '.sub', { attrs: ' colspan="2"', type: 'text' }) + '<th colspan="2" class="g">평 가 자</th><td colspan="2">' + au('대표자') + '</td></tr>' +
+          '<tr><th rowspan="2" class="g">세부작업</th><th colspan="2" class="g">유해위험요인 파악</th><th rowspan="2" class="g">현재 안전보건조치</th><th rowspan="2" class="g">재해사례</th><th colspan="3" class="g">현재 위험성</th><th colspan="2" class="g">감소대책</th><th rowspan="2" class="g">개선후<br>위험성</th><th rowspan="2" class="g">개선<br>예정일</th><th rowspan="2" class="g">완료일</th><th rowspan="2" class="g">담당자</th></tr>' +
+          '<tr><th class="g">위험분류</th><th class="g">유해・위험 상황 및 결과</th><th class="g">가능성</th><th class="g">중대성</th><th class="g">위험성</th><th class="g">NO</th><th class="g">세부내용</th></tr>' +
+          rows(base + '.rows', '위험요인', function (r) {
+            var v = (+r.p || 0) * (+r.s || 0);
+            return '<td>' + nl(r.task) + '</td><td>' + nl(r.cls) + '</td><td class="l">' + nl(r.situation) + '</td><td class="l">' + nl(r.measure) + '</td><td>' + nl(r.cases) + '</td><td>' + (r.p || '') + '</td><td>' + (r.s || '') + '</td><td>' + (v ? v + '<br>(' + (v >= 6 ? '높음' : v === 4 ? '보통' : '낮음') + ')' : '') + '</td><td>' + nl(r.redNo) + '</td><td class="l">' + nl(r.redText) + '</td><td>' + nl(r.after) + '</td><td>' + nl(r.plan) + '</td><td>' + nl(r.done) + '</td><td>' + nl(r.owner) + '</td>';
+          }) + '</table></div>' + addBtn(base + '.rows', '위험요인') + '</div>';
+      }).join('') + tblAddBtn('result');
     },
     edu: function () {
       function block(title, path) {
@@ -688,7 +738,7 @@
       (cur.edit.interviews || []).forEach(function (iv, i) {
         var key = rowReg('edit.interviews', i, '경험담');
         h += '<tr><th colspan="2" class="l">경험담 ' + (i + 1) + '　성 명 : ' + au('근로자 이름 자동') + ' (인)</th></tr>' +
-          '<tr class="ed-row" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정"><td colspan="2" class="l">【대상공종】' + nl(iv.work) + '<br>【근로자 의견】' + nl(iv.opinion) + '<br>【위험성평가 담당자 의견】' + nl(iv.reply) + '</td></tr>';
+          '<tr class="ed-row" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정"><td colspan="2" class="l">【대상공종】' + nl(iv.work) + '<br>【근로자 의견】' + nl(iv.opinion) + '<br>【위험성평가 담당자 의견】' + nl(iv.reply) + rowX('edit.interviews', i) + '</td></tr>';
       });
       return h + '</table></div>' + addBtn('edit.interviews', '경험담');
     },
@@ -711,7 +761,7 @@
       var body = rs.map(function (r, i) {
         var key = rowReg('edit.ppe.rows', i, '지급계획');
         return '<tr>' + (i === 0 ? '<td rowspan="' + rs.length + '">' + au('근로자 명단') + '<br><br>' + au('업체명') + '</td>' : '') +
-          '<td class="l ed-c" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + nl(r.plan) + '</td><td class="ed-c" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + nl(r.note) + '</td></tr>';
+          '<td class="l ed-c" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + nl(r.plan) + '</td><td class="ed-c" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + nl(r.note) + rowX('edit.ppe.rows', i) + '</td></tr>';
       }).join('');
       return '<h3 class="rp-h">개인보호구</h3><p class="rp-p">□ 개인보호구 지급계획서</p><div class="rp-wrap"><table class="rt"><colgroup><col style="width:28%"><col><col style="width:24%"></colgroup>' +
         '<tr><th>대상자</th><th>지급계획</th><th>비고</th></tr>' + body + '</table></div>' + addBtn('edit.ppe.rows', '지급계획') +
@@ -737,8 +787,8 @@
   };
   /* 항목마다 「원본으로 되돌리기」 할 때 되돌릴 내용 */
   var SEC_PATHS = {
-    process: ['process'], equip: ['work', 'equipment', 'chemicals', 'info'], patrol: ['patrol'], cases: ['cases'], msds: ['msds'],
-    hazard: ['hazardChecks', 'hazardEquip', 'hazardMaterial'], results: ['results', 'resultSubName'], edu: ['preEdu', 'postEdu'],
+    process: ['processes'], equip: ['infoTables'], patrol: ['patrol'], cases: ['cases'], msds: ['msds'],
+    hazard: ['hazardTables'], results: ['resultTables'], edu: ['preEdu', 'postEdu'],
     interviews: ['interviews'], budget: ['budget'], danger: ['dangerWork'], ppe: ['ppe'], insp: ['inspection', 'inspectionPlan'],
     eduRec: ['eduRecord', 'eduPhotoLabel'], emer: ['emergencyFlow']
   };
@@ -767,34 +817,21 @@
       return h + '<button class="btn btn-primary btn-big" data-act="home">처음 화면으로</button>';
     }
     EDREG = {};
-    var page = PAGES[setSec]();
-    var keys = Object.keys(EDREG);
-    var legend = '<div class="ed-legend"><div class="ed-lh">✎ 이 표에서 고칠 수 있는 부분 <small>(표에서 바로 눌러도 됩니다)</small></div><div class="ed-keys">' +
-      legendKeys(keys) +
-      (setSec === 'hazard' ? '<span class="ed-note">▣/□ 칸은 누르면 바로 바뀝니다</span>' : '') + '</div>' +
-      '<div class="ed-lg"><span class="ph">회색 글씨</span> 업체가 적는 곳 · <span class="au">파란 글씨</span> 자동으로 들어가는 곳 · <span class="ed-sample">테두리</span> 고칠 수 있는 곳</div></div>';
     return '<button class="btn btn-sm btn-ghost set-back" data-act="setBack">◀ 목차로</button>' +
-      '<div class="rp-crumb">' + esc(chapterOf(setSec)) + ' › <b>' + esc(SEC_TITLE[setSec]) + '</b></div>' +
-      '<p class="lead sm">고칠 수 있는 칸을 <b>누르면</b> 고치는 창이 뜹니다<span class="pc-only"> (마우스를 올리면 테두리가 생겨요)</span>. 고칠 것이 없으면 아래 <b>「확인」</b>을 누르세요.</p>' +
-      '<div class="rp' + (showEd ? ' show-ed' : '') + '">' + page + '</div>' + legend +
+      '<div class="rp' + (showEd ? ' show-ed' : '') + '">' + PAGES[setSec]() + '</div>' +
       '<button class="btn btn-ghost btn-reset" data-act="resetSec" data-sec="' + setSec + '">↺ 이 항목을 원본 내용으로 되돌리기</button>';
   }
-  /* 줄이 여러 개인 목록은 「조사 항목 1~20」처럼 한 칸으로 묶어 보여 줌 */
-  function legendKeys(keys) {
-    var out = [], grp = {};
-    keys.forEach(function (k) {
-      var m = /^(.*)\.(\d+)$/.exec(k), lab = EDREG[k].label;
-      if (m && /\s\d+$/.test(lab)) {
-        var base = lab.replace(/\s\d+$/, '');
-        if (!grp[m[1]]) { grp[m[1]] = { base: base, n: 0, first: k }; out.push(grp[m[1]]); }
-        grp[m[1]].n++;
-      } else out.push({ key: k });
+  /* 넓은 표는 옆으로 밀지 않고 화면 폭에 맞게 줄여서 보여 줌 (손가락으로 벌리면 확대) */
+  function fitTables() {
+    if (view !== 'settings' || !setSec) return;
+    Array.prototype.forEach.call(document.querySelectorAll('.rp-wrap > table'), function (t) {
+      t.style.zoom = '';
+      var w = t.parentNode.clientWidth, sw = t.scrollWidth;
+      if (w && sw > w + 1) t.style.zoom = (Math.floor(w / sw * 1000) / 1000).toString();
     });
-    return out.map(function (o) {
-      if (o.key) return '<button class="ed-key" data-act="edOpen" data-ed="' + esc(o.key) + '">' + esc(EDREG[o.key].label) + '</button>';
-      return '<span class="ed-key grp">' + esc(o.base) + (o.n > 1 ? ' 1~' + o.n : ' 1') + ' <small>표에서 고칠 줄을 누르세요</small></span>';
-    }).join('');
   }
+  var fitT = null;
+  window.addEventListener('resize', function () { clearTimeout(fitT); fitT = setTimeout(fitTables, 120); });
   function chapterOf(id) {
     for (var c = 0; c < CHAPTERS.length; c++) if ((CHAPTERS[c].items || []).indexOf(id) >= 0) return CHAPTERS[c].no + '. ' + CHAPTERS[c].title;
     return '';
@@ -987,17 +1024,41 @@
       case 'edShow': showEd = !showEd; rerender(); if (showEd) toast('테두리 친 칸을 누르면 고칠 수 있어요.'); break;
       case 'edOpen': openMemo(b.dataset.ed); break;
       case 'edAdd': {
-        var lp = b.dataset.path, la = getP(cur, lp), lt = ROWT[lp];
+        var lp = b.dataset.path, la = getP(cur, lp), lt = ROWT[norm(lp)];
         memoSnap = clone(cur.edit); la = getP(cur, lp);
-        la.push(lt ? clone(lt) : ''); save(); rerender();
+        var nv = lt ? clone(lt) : '';
+        if (lp === 'edit.processes') nv.id = 'p' + Date.now().toString(36);
+        la.push(nv); save(); rerender();
         openMemo(lp + '.' + (la.length - 1), true); break;
       }
       case 'edSave': cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; closeMemo('저장했습니다. 모든 업체 보고서에 들어갑니다.'); break;
       case 'edCancel': if (memoSnap) cur.edit = memoSnap; closeMemo(); break;
       case 'edDel': {
-        if (!confirm('이 줄을 지울까요?')) break;
-        var dr = EDREG[memoKey]; if (dr && dr.del) dr.del();
+        var dr = EDREG[memoKey]; if (!dr || !dr.del) break;
+        var isProc = /^edit\.processes\.\d+$/.test(memoKey);
+        if (!isProc && !confirm('이 줄을 지울까요?')) break;
+        if (!dr.del()) break;
         cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; closeMemo('지웠습니다.'); break;
+      }
+      case 'rowDel': {
+        if (delRow(b.dataset.path, +b.dataset.i)) { cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; save(true); rerender(); toast('지웠습니다.'); }
+        break;
+      }
+      case 'tblAdd': {
+        var tk = TBL[b.dataset.kind], tl = cur.edit[tk.path] = cur.edit[tk.path] || [], used = tl.map(function (x) { return x.proc; });
+        var ps = cur.edit.processes || [], free = ps.filter(function (x) { return used.indexOf(x.id) < 0; })[0] || ps[0];
+        var nt = tk.tmpl(); nt.proc = free ? free.id : '';
+        tl.push(nt); cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; save(true); rerender();
+        setTimeout(function () { var bars = document.querySelectorAll('.tbl'); if (bars.length) bars[bars.length - 1].scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
+        toast('표를 추가했습니다. 「' + (free ? free.name : '') + '」 공정으로 정했어요.');
+        break;
+      }
+      case 'tblDel': {
+        var dk = TBL[b.dataset.kind], dl = cur.edit[dk.path], di = +b.dataset.t;
+        if (!dl || dl.length <= 1) break;
+        if (!confirm(dk.name + ' 표 ' + (di + 1) + '(「' + procName(dl[di].proc) + '」)을 지울까요?')) break;
+        dl.splice(di, 1); cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; save(true); rerender(); toast('표를 지웠습니다.');
+        break;
       }
       case 'new': cur = newCompany(); Settings.set('currentId', cur.id); save(true); goStep(0); break;
       case 'open': openCompany(b.dataset.id); break;
@@ -1080,10 +1141,10 @@
         getP(cur, b.dataset.path).splice(+b.dataset.i, 1); save(); rerender(); break;
       }
       case 'mv': { var a2 = getP(cur, b.dataset.path), i2 = +b.dataset.i, j = i2 + (+b.dataset.d); var t = a2[i2]; a2[i2] = a2[j]; a2[j] = t; save(); rerender(); break; }
-      case 'hz': { var hc = cur.edit.hazardChecks, ix = hc.indexOf(b.dataset.k); if (ix >= 0) hc.splice(ix, 1); else hc.push(b.dataset.k); if (view === 'settings') { cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; } save(); rerender(); break; }
+      case 'hz': { var hct = cur.edit.hazardTables[+b.dataset.t || 0]; hct.checks = hct.checks || []; var hc = hct.checks, ix = hc.indexOf(b.dataset.k); if (ix >= 0) hc.splice(ix, 1); else hc.push(b.dataset.k); if (view === 'settings') { cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; } save(); rerender(); break; }
       case 'resetSec': {
         var rs = b.dataset.sec;
-        if (confirm('「' + SEC_TITLE[rs] + '」을(를) 원본 내용으로 되돌릴까요?')) { SEC_PATHS[rs].forEach(function (p) { cur.edit[p] = clone(T.DEFAULT_EDIT[p]); }); if (cur.reviewed) delete cur.reviewed[rs]; save(); rerender(); toast('원본 내용으로 되돌렸습니다.'); }
+        if (confirm('「' + SEC_TITLE[rs] + '」을(를) 원본 내용으로 되돌릴까요?')) { SEC_PATHS[rs].forEach(function (p) { cur.edit[p] = clone(T.DEFAULT_EDIT[p]); }); T.upgradeEdit(cur.edit); if (cur.reviewed) delete cur.reviewed[rs]; save(); rerender(); toast('원본 내용으로 되돌렸습니다.'); }
         break;
       }
       case 'pdf': save(true); makePdf(false); break;

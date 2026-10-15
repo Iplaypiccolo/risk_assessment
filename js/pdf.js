@@ -8,7 +8,10 @@
   function cl(s) { return L.clean(s); }
 
   function build(c, assets) {
-    var info = c.info || {}, E = (assets && assets.edit) || c.edit || TPL.DEFAULT_EDIT, A = c.answers || {};
+    var info = c.info || {}, E = TPL.upgradeEdit(JSON.parse(JSON.stringify((assets && assets.edit) || c.edit || TPL.DEFAULT_EDIT))), A = c.answers || {};
+    var PROCS = E.processes || [];
+    var procName = function (id) { for (var i = 0; i < PROCS.length; i++) if (PROCS[i].id === id) return PROCS[i].name; return PROCS[0] ? PROCS[0].name : ''; };
+    var allProcNames = PROCS.map(function (p) { return p.name; }).filter(Boolean).join(', ');
     var Y = D.year(info.writeDate);
     var y = function (s) { return cl(String(s == null ? '' : s).replace(/\{Y\}/g, Y)); };
     var company = cl(info.company), contract = cl(info.contract), ceo = cl(info.ceo);
@@ -171,7 +174,6 @@
     /* ===== 2. 위험성평가 실시 ===== */
     divider('2.\n위험성평가\n실시');
     pageBreak();
-    var P = E.process || {};
     var lab = function (t, extra) { return Object.assign({ text: t, bold: true, alignment: 'center', fontSize: 8.5, fillColor: null }, extra || {}); };
     var val = function (t, extra) { return Object.assign({ text: cl(t), fontSize: 8.5, alignment: 'center' }, extra || {}); };
     content.push({ text: '1. 사업장 개요', bold: true, fontSize: 11, margin: [0, 0, 0, 14] });
@@ -182,22 +184,25 @@
       [lab('조직도', { colSpan: 2, margin: [0, 2, 0, 0] }), {}, { colSpan: 7, stack: [orgChart()], margin: [0, 10, 0, 10] }, {}, {}, {}, {}, {}, {}],
       [lab('공정분석', { colSpan: 9 }), {}, {}, {}, {}, {}, {}, {}, {}],
       [lab('No.'), lab('공정명', { colSpan: 2 }), {}, lab('대상'), lab('공정설명', { colSpan: 2 }), {}, lab('설비', { colSpan: 2 }), {}, lab('물질')],
-      [val('1'), val(P.name, { colSpan: 2 }), {}, val(wNames.join('\n') || '근로자명'), val(P.desc, { colSpan: 2, lineHeight: 1.4 }), {}, val(P.equip, { colSpan: 2, lineHeight: 1.4 }), {}, val(P.material)]
-    ] }, layout: thin });
+    ].concat(PROCS.map(function (P, pi) {
+      return [val(String(pi + 1)), val(P.name, { colSpan: 2 }), {}, val(wNames.join('\n') || '근로자명'), val(P.desc, { colSpan: 2, lineHeight: 1.4 }), {}, val(P.equip, { colSpan: 2, lineHeight: 1.4 }), {}, val(P.material)];
+    })) }, layout: thin });
 
     /* 17쪽 안전보건상 위험정보 (가로) */
-    pageBreak('landscape');
     var inf = E.info || {};
     var chk = function (b) { return b ? '■' : '□'; };
-    var hv = inf.heavy || {};
-    var env = inf.envMeasure || 'none';
     var tr = c.traits || {};
     var traitsTxt = F.traits.map(function (t) { return t[1] + ' ' + chk(tr[t[0]]); });
-    var otherInfo = F.otherInfoHead.slice();
     var sub = A.i_sub ? A.i_sub === 'O' : !!inf.subcontract;
     var permit = A.i_permit ? A.i_permit === 'O' : !!inf.permit;
     var checkup = A.i_checkup ? A.i_checkup === 'O' : !!inf.checkup;
-    otherInfo = otherInfo.concat([
+    var tl = function (t, x) { return Object.assign({ text: t, alignment: 'center', fontSize: 8, bold: true }, x || {}); };
+    (E.infoTables || []).forEach(function (IT) {
+    pageBreak('landscape');
+    var hv = IT.heavy || {};
+    var env = IT.envMeasure || 'none';
+    var work = procName(IT.proc);
+    var otherInfo = F.otherInfoHead.concat([
       '○ 도급(일부, 전부 또는 혼재작업) (유' + chk(sub) + ', 무' + chk(!sub) + ')',
       '○ 재해사례, 재해통계 등에 관한 정보',
       '- 재해사례 및 재해통계 정보조사 참조',
@@ -211,15 +216,14 @@
       traitsTxt.slice(3).join('   '),
       '○ 그 밖에 위험성평가에 참고가 되는 자료 등'
     ]);
-    var eq = E.equipment || [];
-    var ch = E.chemicals || [];
-    var tl = function (t, x) { return Object.assign({ text: t, alignment: 'center', fontSize: 8, bold: true }, x || {}); };
+    var eq = IT.equipment || [];
+    var ch = IT.chemicals || [];
     content.push({ table: { widths: [58, 60, 104, 50, 80, 56, 56, 60, 60, '*'], body: [
-      [tl('작업'), val(E.work), { text: '안전ㆍ보건상 위험정보', colSpan: 6, rowSpan: 2, alignment: 'center', bold: true, fontSize: 15, fillColor: '#FDE9D9', margin: [0, 8, 0, 0] }, {}, {}, {}, {}, {}, tl('근로자수'), val(workerCount)],
+      [tl('작업'), val(work), { text: '안전ㆍ보건상 위험정보', colSpan: 6, rowSpan: 2, alignment: 'center', bold: true, fontSize: 15, fillColor: '#FDE9D9', margin: [0, 8, 0, 0] }, {}, {}, {}, {}, {}, tl('근로자수'), val(workerCount)],
       [tl('평가일시'), val(D.kor(info.writeDate), { fontSize: 7.5 }), {}, {}, {}, {}, {}, {}, tl('평가자'), val(ceo)],
       [tl('공정', { rowSpan: 2, margin: [0, 8, 0, 0] }), tl('기계 ･ 기구 및 설비', { colSpan: 3, fillColor: LGRAY }), {}, {}, tl('유 해 화 학 물 질', { colSpan: 3, fillColor: LGRAY }), {}, {}, tl('기타 안전ㆍ보건상 정보', { colSpan: 3, rowSpan: 2, fillColor: LGRAY, margin: [0, 8, 0, 0] }), {}, {}],
       [{}, tl('설 비 명', { colSpan: 2 }), {}, tl('수량'), tl('화학물질명'), tl('취급량(일)'), tl('취급시간'), {}, {}, {}],
-      [val(E.work, { margin: [0, 4, 0, 0] }),
+      [val(work, { margin: [0, 4, 0, 0] }),
         { colSpan: 2, stack: eq.map(function (e) { return { text: cl(e.name), fontSize: 8, alignment: 'center', margin: [0, 2, 0, 2] }; }), margin: [0, 4, 0, 0] }, {},
         { stack: eq.map(function (e) { return { text: cl(e.qty), fontSize: 8, alignment: 'center', margin: [0, 2, 0, 2] }; }), margin: [0, 4, 0, 0] },
         { stack: ch.map(function (e) { return { text: cl(e.name), fontSize: 8, alignment: 'center' }; }), margin: [0, 4, 0, 0] },
@@ -227,6 +231,7 @@
         { stack: ch.map(function (e) { return { text: cl(e.time), fontSize: 8, alignment: 'center' }; }), margin: [0, 4, 0, 0] },
         { colSpan: 3, stack: otherInfo.map(function (t) { return { text: t, fontSize: 7.5, margin: [2, 1.5, 2, 1.5] }; }) }, {}, {}]
     ] }, layout: thin });
+    });
 
     /* 18~19쪽 순회점검 조사표 */
     pageBreak('portrait');
@@ -246,7 +251,7 @@
     var acc = c.accident || {};
     var hadAcc = A.q10b === 'O';
     var accCases = hadAcc ? (acc.cases || 0) : 0, accDead = hadAcc ? (acc.dead || 0) : 0, accInj = hadAcc ? (acc.injured || 0) : 0;
-    content.push({ text: '□ 공종명 : ' + cl(E.work), fontSize: 9, margin: [0, 6, 0, 10] });
+    content.push({ text: '□ 공종명 : ' + cl(allProcNames), fontSize: 9, margin: [0, 6, 0, 10] });
     content.push({ text: '□ 재해통계(' + (Y - 4) + '년~' + (Y - 1) + ')', fontSize: 9, margin: [0, 0, 0, 6] });
     content.push({ table: { widths: ['*', '*', '*', '*'], body: [
       ['사 고', '사망(명)', '부상(명)', '비고'].map(function (h) { return { text: h, alignment: 'center', fontSize: 8.5, fillColor: '#FDE9D9' }; }),
@@ -273,11 +278,13 @@
     ].concat(msRows) }, layout: thin });
 
     /* 22쪽 유해위험요인 분류 */
+    (E.hazardTables || []).forEach(function (HT) {
     pageBreak();
-    var checks = {}; (E.hazardChecks || []).forEach(function (k) { checks[k] = true; });
+    var checks = {}; (HT.checks || []).forEach(function (k) { checks[k] = true; });
+    var hw = procName(HT.proc);
     var hzBody = [
       [{ text: '유해위험요인 분류', colSpan: 11, alignment: 'center', bold: true, fontSize: 13, margin: [0, 4, 0, 4] }, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}],
-      [tl('공 정'), val(E.work, { fontSize: 7.5 }), tl('세부 분류', { colSpan: 2 }), {}, val(E.resultSubName || E.work, { fontSize: 7.5 }), tl('설비', { colSpan: 2 }), {}, val(E.hazardEquip || '-', { fontSize: 7.5 }), tl('물질', { colSpan: 2 }), {}, val(E.hazardMaterial || '-', { fontSize: 7.5 })]
+      [tl('공 정'), val(hw, { fontSize: 7.5 }), tl('세부 분류', { colSpan: 2 }), {}, val(HT.sub || hw, { fontSize: 7.5 }), tl('설비', { colSpan: 2 }), {}, val(HT.equip || '-', { fontSize: 7.5 }), tl('물질', { colSpan: 2 }), {}, val(HT.material || '-', { fontSize: 7.5 })]
     ];
     F.hazardGroups.forEach(function (grp, gi) {
       var rowsN = Math.ceil(grp.items.length / 3);
@@ -295,18 +302,21 @@
       }
     });
     content.push({ table: { widths: [18, 54, 14, 22, '*', 14, 22, '*', 14, 22, '*'], body: hzBody }, layout: thin });
+    });
 
     /* 23~26쪽 위험성평가 결과서 (가로) */
-    pageBreak('landscape');
     var hd = function (t, x) { return Object.assign({ text: t, alignment: 'center', fontSize: 7.5, bold: true, fillColor: '#E2EFDA' }, x || {}); };
+    var riskLabel = function (v) { return v >= 6 ? '높음' : v === 4 ? '보통' : '낮음'; };
+    (E.resultTables || []).forEach(function (RT) {
+    pageBreak('landscape');
+    var rw = procName(RT.proc);
     var rsBody = [
-      [hd('공정명', { colSpan: 2 }), {}, val(E.work, { colSpan: 2, fontSize: 8 }), {}, { text: '위험성평가 결과서', colSpan: 6, rowSpan: 2, alignment: 'center', bold: true, fontSize: 16, color: 'white', fillColor: '#2E9E6E', margin: [0, 6, 0, 0] }, {}, {}, {}, {}, {}, hd('평가일자', { colSpan: 2 }), {}, val(D.dot(info.writeDate), { colSpan: 2, fontSize: 8 }), {}],
-      [hd('세부공정명', { colSpan: 2 }), {}, val(E.resultSubName || E.work, { colSpan: 2, fontSize: 8 }), {}, {}, {}, {}, {}, {}, {}, hd('평 가 자', { colSpan: 2 }), {}, val(ceo, { colSpan: 2, fontSize: 8 }), {}],
+      [hd('공정명', { colSpan: 2 }), {}, val(rw, { colSpan: 2, fontSize: 8 }), {}, { text: '위험성평가 결과서', colSpan: 6, rowSpan: 2, alignment: 'center', bold: true, fontSize: 16, color: 'white', fillColor: '#2E9E6E', margin: [0, 6, 0, 0] }, {}, {}, {}, {}, {}, hd('평가일자', { colSpan: 2 }), {}, val(D.dot(info.writeDate), { colSpan: 2, fontSize: 8 }), {}],
+      [hd('세부공정명', { colSpan: 2 }), {}, val(RT.sub || rw, { colSpan: 2, fontSize: 8 }), {}, {}, {}, {}, {}, {}, {}, hd('평 가 자', { colSpan: 2 }), {}, val(ceo, { colSpan: 2, fontSize: 8 }), {}],
       [hd('세부작업', { rowSpan: 2 }), hd('유해위험요인 파악', { colSpan: 2 }), {}, hd('현재 안전보건조치', { rowSpan: 2 }), hd('재해사례\n(안전보건\n정보 참조)', { rowSpan: 2 }), hd('현재 위험성', { colSpan: 3 }), {}, {}, hd('감소대책', { colSpan: 2 }), {}, hd('개선후\n위험성', { rowSpan: 2 }), hd('개선\n예정일', { rowSpan: 2 }), hd('완료일', { rowSpan: 2 }), hd('담당자', { rowSpan: 2 })],
       [{}, hd('위험분류'), hd('유해・위험 상황 및 결과'), {}, {}, hd('가능성\n(빈도)'), hd('중대성\n(강도)'), hd('위험성'), hd('NO'), hd('세부내용'), {}, {}, {}, {}]
     ];
-    var riskLabel = function (v) { return v >= 6 ? '높음' : v === 4 ? '보통' : '낮음'; };
-    (E.results || []).forEach(function (r) {
+    (RT.rows || []).forEach(function (r) {
       var p = +r.p || 0, s = +r.s || 0, rv = p && s ? p * s : '';
       var f = { fontSize: 7.5, lineHeight: 1.25 };
       rsBody.push([
@@ -327,6 +337,7 @@
       ]);
     });
     content.push({ _big: true, table: { headerRows: 4, dontBreakRows: true, widths: [44, 50, '*', 104, 40, 26, 26, 30, 18, 78, 30, 38, 34, 38], body: rsBody }, layout: tight });
+    });
 
     /* ===== 3. 위험성평가 교육 ===== */
     divider('3.\n위험성평가\n교육');

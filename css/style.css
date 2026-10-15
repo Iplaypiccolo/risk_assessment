@@ -355,7 +355,7 @@ select.sel:focus { outline: none; border-color: var(--accent); background-color:
 .lead.sm { font-size: 16px; }
 
 .rp { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin: 10px 0 14px; color: #111; font-family: 'Pretendard', sans-serif; }
-.rp-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 8px; }
+.rp-wrap { overflow: hidden; margin: 0 0 8px; }
 .rt { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 1.45; table-layout: auto; }
 .rt.wide { min-width: 900px; }
 .rt th, .rt td { border: 1px solid #555; padding: 6px 7px; vertical-align: middle; text-align: center; }
@@ -402,7 +402,7 @@ select.sel:focus { outline: none; border-color: var(--accent); background-color:
   .rp .ed-row:hover > td { background: #fff6d6; box-shadow: inset 0 2.5px 0 var(--plow), inset 0 -2.5px 0 var(--plow); }
   .rp .ed-row:hover > td:first-child { box-shadow: inset 2.5px 2.5px 0 var(--plow), inset 0 -2.5px 0 var(--plow); }
   .rp .ed-row:hover > td:last-child { box-shadow: inset -2.5px 2.5px 0 var(--plow), inset 0 -2.5px 0 var(--plow); }
-  .rp div.ed:hover::after, .rp td.ed:hover::after, .rp .ed-c:hover::after, .rp .ed-row:hover > td:last-child::after { content: '✎'; position: absolute; top: 1px; right: 3px; font-size: 12px; color: var(--plow-ink, #8a5a00); font-style: normal; }
+  .rp div.ed:hover::after, .rp td.ed:hover::after { content: '✎'; position: absolute; top: 1px; right: 3px; font-size: 12px; color: var(--plow-ink, #8a5a00); font-style: normal; }
 }
 .rp.show-ed .ed, .rp.show-ed .ed-c, .rp.show-ed .ed-row > td { box-shadow: inset 0 0 0 2px var(--plow); background: #fffaea; }
 .rp .ed-row > td { position: relative; }
@@ -456,3 +456,19 @@ body.wide .app, body.wide .top-inner { max-width: 1180px; }
   .rt.wide:not(.res) td, .rt.wide:not(.res) th { font-size: 9.5px; }
   .bottom.compact .btn { font-size: 16px; padding: 0 10px; }
 }
+
+/* 표 여러 개 (공정마다) */
+.tbl { margin: 0 0 22px; }
+.tbl + .tbl { padding-top: 18px; border-top: 2px dashed var(--line); }
+.tbl-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 8px; font-size: 15px; color: var(--muted); }
+.tbl-bar b { color: var(--ink); }
+.tbl-x { flex: none; width: 36px; height: 36px; border-radius: 10px; border: 1.5px solid var(--line); background: #fff; color: var(--stop, #c0392b); font-size: 18px; font-weight: 700; cursor: pointer; line-height: 1; }
+.tbl-x:hover { background: #fdecea; border-color: var(--stop, #c0392b); }
+.rp-addtbl { width: 100%; border-style: dashed; margin: 4px 0 6px; }
+/* 줄 지우기 ✕ : 마우스를 올린 줄에만 보임 */
+.row-x { display: none; position: absolute; right: 3px; top: 50%; transform: translateY(-50%); z-index: 2; width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 1.5px solid #e3a5a0; background: #fff; color: #c0392b; font-size: 13px; font-weight: 800; line-height: 1; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+.row-x:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+@media (hover: hover) { .rp .ed-row:hover .row-x, .rp div.ed:hover .row-x, .rp tr:hover > .ed-c .row-x { display: block; } }
+.rp.show-ed .row-x { display: block; }
+.rp div.ed:hover::after { content: none; }
+@media (max-width: 640px) { .tbl-bar { font-size: 13px; } }

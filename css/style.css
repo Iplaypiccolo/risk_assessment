@@ -474,3 +474,56 @@ body.wide .app, body.wide .top-inner { max-width: 1180px; }
 @media (max-width: 640px) { .tbl-bar { font-size: 13px; } }
 .rp.show-ed .ed-row > td:last-child, .rp.show-ed tr > .ed-c:last-child { padding-right: 30px; }
 .rp.show-ed div.ed { padding-right: 30px; }
+/* 서명할 곳 안내 */
+.sign-guide { background: #fffaea; border: 1.5px solid #f2d27a; border-radius: var(--radius); padding: 14px 14px 6px; margin: 16px 0; }
+.sign-guide h3 { margin: 0 0 8px; font-size: 19px; }
+.sign-guide ol { list-style: none; margin: 0; padding: 0; }
+.sign-guide li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px dashed #ecd9a0; }
+.sign-guide li:first-child { border-top: 0; }
+.sg-pg { flex: none; min-width: 74px; text-align: center; background: var(--plow); color: var(--plow-ink); font-weight: 800; border-radius: 10px; padding: 6px 8px; font-size: 16px; }
+.sg-t { display: flex; flex-direction: column; gap: 2px; font-size: 16px; }
+.sg-t span { color: var(--ink); }
+.sg-t em { font-style: normal; color: var(--muted); font-size: 15px; }
+
+/* ===== 서류 고르기 (위험성평가 · 작업계획서 · 특별교육) ===== */
+.doc-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 14px 0 12px; background: var(--ice); padding: 5px; border-radius: 16px; }
+.doc-tabs button { border: 0; background: transparent; border-radius: 12px; min-height: 52px; font-size: 18px; font-weight: 800; color: var(--muted); cursor: pointer; font-family: inherit; padding: 4px; }
+.doc-tabs button[aria-selected="true"] { background: var(--accent); color: #fff; box-shadow: 0 4px 12px rgba(31,95,143,.28); }
+@media (hover: hover) { .doc-tabs button[aria-selected="false"]:hover { background: #fff; color: var(--ink); } }
+@media (max-width: 380px) { .doc-tabs button { font-size: 16px; } }
+
+/* 첨부 */
+.att { border: 1.5px solid var(--line); border-radius: var(--radius); padding: 12px; margin: 12px 0; background: var(--frost); }
+.att-h { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; margin-bottom: 8px; }
+.att-h b { font-size: 18px; }
+.att-h .ok { color: var(--go); font-weight: 700; font-size: 15px; }
+.att-list { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
+.att-list li { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
+.att-list img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); flex: none; }
+.att-ic { width: 64px; height: 64px; display: grid; place-items: center; font-size: 30px; background: var(--ice); border-radius: 8px; flex: none; }
+.att-n { flex: 1; min-width: 0; font-size: 16px; word-break: break-all; }
+.att-n small { display: block; color: var(--muted); font-size: 13px; }
+.att-b { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.att-none { margin: 0 0 10px; }
+.route-img { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 8px; margin-bottom: 10px; text-align: center; }
+.route-img img { max-width: 100%; max-height: 360px; object-fit: contain; }
+.row3 { display: flex; flex-wrap: wrap; gap: 8px; }
+.row3 > * { flex: 1 1 140px; }
+.card.unit { border-left: 5px solid var(--plow); }
+.unit-add .chip { font-size: 18px; }
+.ox-btn.on { outline: 4px solid var(--plow); outline-offset: 2px; }
+.ie .crop-msg small { display: block; font-size: 14px; opacity: .85; font-weight: 500; }
+
+/* 설정 화면: 작업계획서 · 교육일지 */
+.rp .pt-t { font-size: 18px; }
+.rp .hi { color: #1f3fd1; font-weight: 700; }
+.rp .dim { color: #bbb; }
+.rp-sub { margin: 16px 0 8px; font-size: 16px; }
+.rt td.sign { height: 46px; }
+.mats { display: flex; flex-wrap: wrap; gap: 6px; }
+.rp .mat { display: inline-block; border: 1px solid #ccc; border-radius: 6px; padding: 4px 26px 4px 8px; position: relative; }
+.edu-blk { margin: 4px 0 10px; }
+.edu-blk + .edu-blk { border-top: 1px dashed #ccc; padding-top: 8px; }
+@media (max-width: 640px) { .att-list img, .att-ic { width: 52px; height: 52px; } .att-n { font-size: 14px; } }
+.ie .crop-zoom { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ie .crop-zoom .btn { min-width: 0; padding: 0 6px; font-size: 16px; }

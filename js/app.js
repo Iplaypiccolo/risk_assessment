@@ -22,6 +22,33 @@
     { key: 'photos', title: '사진 넣기', short: '사진', icon: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>' },
     { key: 'done', title: 'PDF 받기', short: 'PDF', icon: '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M12 11v6M9.5 14.5L12 17l2.5-2.5"/>' }
   ];
+  /* 세 가지 서류: 위험성평가 · 작업계획서 · 특별교육. 업체 정보와 근로자는 함께 씀 */
+  var STEPS_RA = STEPS;
+  var IC = {
+    info: STEPS_RA[0].icon, workers: STEPS_RA[1].icon, survey: STEPS_RA[2].icon, photos: STEPS_RA[4].icon, done: STEPS_RA[5].icon,
+    equip: '<rect x="2.5" y="10" width="13" height="7" rx="1.5"/><path d="M15.5 12h3l3 3v2h-6z"/><circle cx="7" cy="18.5" r="1.8"/><circle cx="17" cy="18.5" r="1.8"/><path d="M5 10V6h6l2 4"/>',
+    clip: '<path d="M20 11.5l-8.2 8.2a5 5 0 01-7-7L13 4.4a3.3 3.3 0 014.7 4.7l-8.3 8.3a1.7 1.7 0 01-2.4-2.4l7.6-7.6"/>'
+  };
+  var DOCS = {
+    ra: { name: '위험성평가', steps: STEPS_RA, hero: ['위험성평가<br>결과보고서 만들기', '질문에 답하고 사진만 넣으면<br>PDF 보고서가 완성됩니다.', '제설작업 · 약 15분'] },
+    plan: { name: '작업계획서', steps: [
+      { key: 'p_info', title: '기본 정보', short: '기본정보', icon: IC.info },
+      { key: 'workers', title: '근로자', short: '근로자', icon: IC.workers },
+      { key: 'p_units', title: '장비', short: '장비', icon: IC.equip },
+      { key: 'p_survey', title: '사전조사', short: '사전조사', icon: IC.clip },
+      { key: 'done', title: 'PDF 받기', short: 'PDF', icon: IC.done }
+    ], hero: ['장비별<br>작업계획서 만들기', '장비와 운전원을 고르고 서류만 붙이면<br>작업계획서가 완성됩니다.', '굴착기 · 덤프 · 화물차 · 로더'] },
+    sedu: { name: '특별교육', steps: [
+      { key: 'e_info', title: '기본 정보', short: '기본정보', icon: IC.info },
+      { key: 'workers', title: '근로자', short: '근로자', icon: IC.workers },
+      { key: 'e_survey', title: '교육 확인', short: '교육', icon: IC.survey },
+      { key: 'e_photos', title: '사진 넣기', short: '사진', icon: IC.photos },
+      { key: 'done', title: 'PDF 받기', short: 'PDF', icon: IC.done }
+    ], hero: ['특별교육<br>안전교육일지 만들기', '교육한 날과 참석 여부만 답하면<br>교육일지와 참석자 명단이 완성됩니다.', '교육일지 · 참석자 명단 · 사진대지'] }
+  };
+  var doc = DOCS[Settings.get('doc', 'ra')] ? Settings.get('doc', 'ra') : 'ra';
+  STEPS = DOCS[doc].steps;
+  function setDoc(d) { doc = d; Settings.set('doc', d); STEPS = DOCS[d].steps; }
   function svg(paths) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>'; }
   function stepStrip() {
     return '<nav class="steps" aria-label="단계">' + STEPS.map(function (s, i) {
@@ -35,6 +62,8 @@
     { k: 'post2', label: '결과 교육 사진 ②', aspect: 4 / 3 },
     { k: 'edu', label: '채용교육 등 교육사진', aspect: 1.6 }
   ];
+  var SEDU_SLOTS = [{ k: 'sedu1', label: '교육 사진 ①', aspect: 1.42 }, { k: 'sedu2', label: '교육 사진 ②', aspect: 1.42 }];
+  var ALL_SLOTS = PHOTO_SLOTS.concat(SEDU_SLOTS);
   var RELS = [['母', '어머니'], ['父', '아버지'], ['妻', '아내'], ['夫', '남편'], ['子', '아들'], ['女', '딸'], ['兄', '형·오빠'], ['姉', '누나·언니'], ['弟', '동생'], ['妹', '여동생'], ['孫', '손주']];
   var AGENCIES = [['fire', '119 안전센터', '예) 강릉 119안전센터'], ['hospital', '병원', '예) 강릉○○병원'], ['police', '경찰서', '예) 강릉경찰서'], ['patrol', '고속도로 순찰대', '예) 고속도로순찰대 제○지구대']];
 
@@ -75,6 +104,10 @@
     c.agencies = c.agencies || {}; ['fire', 'hospital', 'police', 'patrol'].forEach(function (k) { c.agencies[k] = c.agencies[k] || {}; });
     c.schedule = c.schedule || {}; c.answers = c.answers || {}; c.traits = c.traits || {}; c.accident = c.accident || { cases: 1, injured: 1, dead: 0 };
     c.photos = c.photos || {}; c.photosOrig = c.photosOrig || {};
+    c.docs = c.docs || {};
+    c.docs.ra = c.docs.ra || { lastStep: c.lastStep || 0 };
+    c.docs.plan = c.docs.plan || {}; c.docs.plan.units = c.docs.plan.units || []; c.docs.plan.survey = c.docs.plan.survey || [];
+    c.docs.sedu = c.docs.sedu || {};
     if (c.answers.q2b2 === 'O') c.answers.q2b2 = 'B'; else if (c.answers.q2b2 === 'X') c.answers.q2b2 = 'N';
     delete c.answers.q10c;
     return c;
@@ -85,8 +118,11 @@
     T.upgradeEdit(s.edit);
     Object.keys(T.DEFAULT_EDIT).forEach(function (k) { if (s.edit[k] === undefined) s.edit[k] = clone(T.DEFAULT_EDIT[k]); });
     T.upgradeEdit(s.edit);
+    s.plan = DOCTPL.fillPlan(s.plan); s.sedu = DOCTPL.fillSedu(s.sedu);
     return s;
   }
+  function PS() { return (SET && SET.plan) || DOCTPL.fillPlan(null); }
+  function SS() { return (SET && SET.sedu) || DOCTPL.fillSedu(null); }
   function E() { return (SET && SET.edit) || T.DEFAULT_EDIT; }
   var saveT = null;
   function save(now) {
@@ -127,17 +163,17 @@
   function render() {
     var nav = document.getElementById('bottomNav'), prog = document.getElementById('progress'), menu = document.getElementById('topMenu');
     var sub = document.getElementById('topSub');
-    if (sub) sub.textContent = view === 'step' && cur ? (cur.info.company || '업체명 미입력') : view === 'settings' ? '모든 업체에 똑같이 적용' : '제설작업 위험성평가 결과보고서';
+    if (sub) sub.textContent = view === 'step' && cur ? (cur.info.company || '업체명 미입력') + ' · ' + DOCS[doc].name : view === 'settings' ? DOCS[doc].name + ' · 모든 업체에 똑같이 적용' : '위험성평가 · 작업계획서 · 특별교육';
     nav.classList.toggle('compact', view === 'settings');
     document.body.classList.toggle('wide', view === 'settings' && !!setSec);
     if (view === 'home') {
-      document.getElementById('topTitle').textContent = '위험성평가 보고서 만들기';
+      document.getElementById('topTitle').textContent = '제설작업 안전 서류 만들기';
       nav.hidden = true; prog.hidden = true; menu.hidden = true;
       renderHome(); return;
     }
     var bp = document.getElementById('btnPrev'), bn = document.getElementById('btnNext');
     if (view === 'settings') {
-      document.getElementById('topTitle').textContent = setSec ? secNo(setSec) + '. ' + SEC_TITLE[setSec] : '보고서 기본 내용 바꾸기';
+      document.getElementById('topTitle').textContent = setSec ? secNo(setSec) + '. ' + secTitle(setSec) : DOCS[doc].name + ' 기본 내용 바꾸기';
       prog.hidden = true; menu.hidden = true;
       if (!setSec) nav.hidden = true;
       else {
@@ -161,27 +197,37 @@
       case 'workers': html = viewWorkers(); break;
       case 'survey': html = viewSurvey(); break;
       case 'contacts': html = viewContacts(); break;
-      case 'photos': html = viewPhotos(); break;
+      case 'photos': html = viewPhotos(PHOTO_SLOTS); break;
       case 'done': html = viewDone(); break;
+      case 'p_info': html = viewPlanInfo(); break;
+      case 'p_units': html = viewPlanUnits(); break;
+      case 'p_survey': html = viewPlanSurvey(); break;
+      case 'e_info': html = viewEduInfo(); break;
+      case 'e_survey': html = viewEduSurvey(); break;
+      case 'e_photos': html = viewPhotos(SEDU_SLOTS); break;
     }
     $app.innerHTML = stepStrip() + '<div class="company-tag">' + esc(cur.info.company || '업체명 미입력') + '</div>' + html;
   }
   function goStep(i, keepScroll) {
     stepIdx = Math.max(0, Math.min(STEPS.length - 1, i)); view = 'step';
-    cur.lastStep = stepIdx; save();
+    cur.docs[doc].lastStep = stepIdx; if (doc === 'ra') cur.lastStep = stepIdx; save();
     render(); if (!keepScroll) window.scrollTo(0, 0);
   }
 
   /* 처음 화면 */
   function renderHome() {
     Store.all().then(function (list) {
-      var h = '<section class="hero"><h1>위험성평가<br>결과보고서 만들기</h1><p>질문에 답하고 사진만 넣으면<br>PDF 보고서가 완성됩니다.</p><span class="hero-tag">제설작업 · 약 15분</span></section>';
+      var hd = DOCS[doc].hero;
+      var h = '<div class="doc-tabs" role="tablist" aria-label="만들 서류">' + Object.keys(DOCS).map(function (k) {
+        return '<button role="tab" data-act="docSel" data-v="' + k + '" aria-selected="' + (k === doc) + '">' + DOCS[k].name + '</button>';
+      }).join('') + '</div>';
+      h += '<section class="hero"><h1>' + hd[0] + '</h1><p>' + hd[1] + '</p><span class="hero-tag">' + hd[2] + '</span></section>';
       h += '<div class="seg" role="group" aria-label="작성 방식"><button data-act="setMulti" data-v="0" aria-pressed="' + !multi + '">한 업체 작성</button><button data-act="setMulti" data-v="1" aria-pressed="' + multi + '">여러 업체 작성</button></div>';
       if (!multi) {
         var last = list.filter(function (c) { return c.id === Settings.get('currentId'); })[0] || list[0];
         if (last) {
-          h += '<div class="card"><div class="card-sub">작성 중인 보고서</div><div class="card-title">' + esc(last.info.company || '업체명 미입력') + '</div>' +
-            '<div class="card-sub">' + esc(last.info.contract || '') + '</div>' +
+          h += '<div class="card"><div class="card-sub">작성 중인 업체 · ' + DOCS[doc].name + '</div><div class="card-title">' + esc(last.info.company || '업체명 미입력') + '</div>' +
+            '<div class="card-sub">' + esc(docStatus(migrate(last))) + '</div>' +
             '<div class="row2 home-btns"><button class="btn btn-primary" data-act="open" data-id="' + last.id + '">이어서 작성 ▶</button>' +
             '<button class="btn btn-ghost" data-act="restart" data-id="' + last.id + '">새로 작성</button></div></div>';
         } else {
@@ -198,7 +244,7 @@
             '<div class="card-title">' + esc(c.info.company || '업체명 미입력') + '</div>' +
             '<div class="card-sub">' + esc(c.info.contract || '계약명 미입력') + '</div>' +
             '<div class="card-sub">근로자 ' + ws.length + '명' + (ws.length ? ' : ' + ws.join(', ') : '') + '</div>' +
-            '<div class="card-sub">질문 ' + (ev.done ? '완료 (' + ev.grade + ')' : '진행 중') + ' · ' + new Date(c.updatedAt || Date.now()).toLocaleDateString('ko-KR') + '</div>' +
+            '<div class="card-sub">' + esc(docStatus(migrate(c), ev)) + ' · ' + new Date(c.updatedAt || Date.now()).toLocaleDateString('ko-KR') + '</div>' +
             '<div class="row4"><button class="btn btn-primary" data-act="open" data-id="' + c.id + '">열기</button>' +
             '<button class="btn btn-ghost" data-act="openWorkers" data-id="' + c.id + '">근로자</button>' +
             '<button class="btn btn-ghost" data-act="copy" data-id="' + c.id + '">복사</button>' +
@@ -206,11 +252,18 @@
         });
       }
       h += '<div class="home-tools">' +
-        '<button class="btn btn-ghost btn-big" data-act="settings">⚙ 보고서 기본 내용 바꾸기</button>' +
-        '<p class="note">위험요인, 점검 항목, 보호구 등 보고서에 미리 들어 있는 내용을 고칩니다. 모든 업체에 똑같이 적용됩니다. 고칠 것이 없으면 누르지 않아도 됩니다.</p>' +
-        '<details class="more"><summary>기본 내용 설정 저장 · 불러오기</summary><p class="note">「보고서 기본 내용 바꾸기」에서 고친 설정만 파일(.json)로 저장하고 불러옵니다. 업체가 작성한 내용은 들어가지 않습니다. 이 파일을 다른 분께 보내 「불러오기」 하면 같은 설정으로 보고서를 만들 수 있습니다.</p><div class="row2"><button class="btn btn-ghost" data-act="export">설정 저장</button><button class="btn btn-ghost" data-act="import">설정 불러오기</button></div></details></div>';
+        '<button class="btn btn-ghost btn-big" data-act="settings">⚙ ' + DOCS[doc].name + ' 기본 내용 바꾸기</button>' +
+        '<p class="note">' + ({ ra: '위험요인, 점검 항목, 보호구 등', plan: '결재칸, 장비별 점검표, 운행경로 그림 등', sedu: '결재칸, 교육구분, 교육내용 등' })[doc] + ' 서류에 미리 들어 있는 내용을 고칩니다. 모든 업체에 똑같이 적용됩니다. 고칠 것이 없으면 누르지 않아도 됩니다.</p>' +
+        '<details class="more"><summary>기본 내용 설정 저장 · 불러오기</summary><p class="note">세 서류(위험성평가·작업계획서·특별교육)의 「기본 내용 바꾸기」에서 고친 설정만 파일(.json)로 저장하고 불러옵니다. 업체가 작성한 내용은 들어가지 않습니다. 이 파일을 다른 분께 보내 「불러오기」 하면 같은 설정으로 보고서를 만들 수 있습니다.</p><div class="row2"><button class="btn btn-ghost" data-act="export">설정 저장</button><button class="btn btn-ghost" data-act="import">설정 불러오기</button></div></details></div>';
       $app.innerHTML = h;
     });
+  }
+
+  function docStatus(c, ev) {
+    if (doc === 'plan') { var n = (c.docs.plan.units || []).length; return n ? '장비 ' + n + '대' : '장비 아직 없음'; }
+    if (doc === 'sedu') { var e = c.docs.sedu; return e.date ? '교육일 ' + e.date.replace(/-/g, '.') : '교육일 미입력'; }
+    ev = ev || L.evalSummary(c);
+    return (c.info.contract || '') + (ev.done ? ' · 질문 완료 (' + ev.grade + ')' : ' · 질문 진행 중');
   }
 
   /* 1. 기본 정보 */
@@ -239,6 +292,7 @@
         field('하는 일', 'workers.' + i + '.role', { chips: ['운전원'], add: 1, ph: '하는 일을 적어 주세요 (예: 신호수)' }) + '</div>';
     });
     h += '<button class="btn btn-ghost btn-big" data-act="addWorker">＋ 근로자 추가</button>';
+    if (doc !== 'ra') return h;
     h += '<div class="card"><div class="card-head"><b>근로자 중에 해당하는 분이 있나요?</b></div><p class="hint">해당하면 눌러서 ■ 표시하세요.</p><div class="chips big">' +
       T.FIXED.traits.map(function (t) { var on = !!cur.traits[t[0]]; return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-act="trait" data-k="' + t[0] + '">' + (on ? '■ ' : '□ ') + t[1] + (t[0] === 'senior' ? ' (55세 이상)' : '') + '</button>'; }).join('') + '</div></div>';
     return h;
@@ -394,9 +448,9 @@
   }
 
   /* 5. 사진 */
-  function viewPhotos() {
+  function viewPhotos(slots) {
     var h = '<p class="lead">사진을 찍거나 앨범에서 고르세요. <b>크기는 자동으로 맞춰집니다.</b></p>';
-    PHOTO_SLOTS.forEach(function (s) {
+    (slots || PHOTO_SLOTS).forEach(function (s) {
       var p = cur.photos[s.k];
       h += '<div class="card photo"><div class="card-head"><b>' + s.label + '</b>' + (p ? '<span class="ok">✔ 넣음</span>' : '') + '</div>' +
         '<div class="ph-box" style="aspect-ratio:' + s.aspect + '">' + (p ? '<img src="' + p + '" alt="">' : '<span>사진 없음</span>') + '</div>' +
@@ -407,8 +461,148 @@
     return h;
   }
 
+  /* ===== 작업계획서 (업체가 하는 일) ===== */
+  function viewPlanInfo() {
+    var pd = cur.docs.plan, i = cur.info;
+    if (pd.workName == null) pd.workName = i.contract || (i.branch ? String(i.branch).replace(/지사$/, '') + '지사 제설작업' : '');
+    if (!pd.start && i.contractStart) pd.start = i.contractStart;
+    if (!pd.end && i.contractEnd) pd.end = i.contractEnd;
+    return '<p class="lead">작업계획서 맨 위 표에 들어갈 정보입니다. 다른 서류에 적은 내용은 함께 씁니다.</p>' +
+      field('업체명', 'info.company', { req: 1, ph: '예) ○○건설기계' }) +
+      field('대표자 성명', 'info.ceo', { req: 1, ph: '예) 홍길동', hint: '결재칸 「사업주」 옆에 들어갑니다.' }) +
+      field('일하는 도로공사 지사', 'info.branch', { ph: '예) 영동' }) +
+      field('작업명(장소)', 'docs.plan.workName', { req: 1, ph: '예) 영동지사 제설작업' }) +
+      field('작업 시작일', 'docs.plan.start', { type: 'date' }) + field('작업 종료일', 'docs.plan.end', { type: 'date' });
+  }
+  function driverSelect(base, u) {
+    return '<label class="field"><span class="lab">운전원</span><select class="sel" data-bind="' + base + '.driver">' +
+      '<option value=""' + (u.driver === '' || u.driver == null ? ' selected' : '') + '>골라 주세요</option>' +
+      cur.workers.map(function (w, i) { return '<option value="' + i + '"' + (u.driver !== '' && u.driver != null && +u.driver === i ? ' selected' : '') + '>' + esc(w.name || ('근로자 ' + (i + 1))) + (w.phone ? ' (' + esc(w.phone) + ')' : '') + '</option>'; }).join('') +
+      '</select><span class="hint">「근로자」에 적은 사람 중에서 고릅니다. 연락처도 함께 들어갑니다.</span></label>';
+  }
+  var KIND_ICON = { image: '🖼', pdf: '📕', hwp: '📘', doc: '📄', other: '📎' };
+  function attachBox(path, title, hint) {
+    var arr = getP(cur, path) || [];
+    var h = '<div class="att"><div class="att-h"><b>' + esc(title) + '</b>' + (hint ? '<span class="hint">' + esc(hint) + '</span>' : '') + '</div>';
+    if (arr.length) h += '<ul class="att-list">' + arr.map(function (f, i) {
+      return '<li>' + (f.kind === 'image' ? '<img src="' + f.data + '" alt="">' : '<span class="att-ic">' + (KIND_ICON[f.kind] || '📎') + '</span>') +
+        '<span class="att-n">' + esc(f.name) + (f.kind === 'hwp' || f.kind === 'doc' || f.kind === 'other' ? '<small>PDF 안에 첨부파일로 들어가요. 인쇄는 따로 해 주세요.</small>' : f.kind === 'pdf' ? '<small>PDF 뒤쪽에 이어 붙여요</small>' : '') + '</span>' +
+        '<span class="att-b">' + (f.kind === 'image' ? '<button class="btn btn-sm btn-ghost" data-act="attEdit" data-path="' + path + '" data-i="' + i + '">✂ 편집</button>' : '') +
+        '<button class="btn btn-sm btn-danger" data-act="attDel" data-path="' + path + '" data-i="' + i + '">빼기</button></span></li>';
+    }).join('') + '</ul>';
+    else h += '<p class="note att-none">붙인 것 없음</p>';
+    h += '<div class="row2"><label class="btn btn-ghost file-btn">📷 사진 찍기<input type="file" accept="image/*" capture="environment" data-attach="' + path + '"></label>' +
+      '<label class="btn btn-ghost file-btn">📎 파일 고르기<input type="file" multiple accept="image/*,.pdf,.hwp,.hwpx,.doc,.docx,application/pdf" data-attach="' + path + '"></label></div></div>';
+    return h;
+  }
+  function routeSrc(path) {
+    var v = getP(cur, path); if (v) return v;
+    var m = /^docs\.plan\.units\.(\d+)\.route$/.exec(path);
+    if (m) return unitRoute(cur.docs.plan.units[+m[1]]);
+    m = /^plan\.types\.(\d+)\.route$/.exec(path);
+    if (m) return (cur.plan.types[+m[1]] || {}).routeDefault || '';
+    return '';
+  }
+  function routeBox(path, title) {
+    var src = routeSrc(path), custom = !!getP(cur, path);
+    return '<div class="att"><div class="att-h"><b>' + esc(title) + '</b>' + (custom ? '<span class="ok">바꾼 그림</span>' : '<span class="hint">기본 그림</span>') + '</div>' +
+      '<div class="route-img">' + (src ? '<img src="' + esc(src) + '" alt="운행경로 그림">' : '<span>그림 없음</span>') + '</div>' +
+      '<div class="row3"><label class="btn btn-ghost file-btn">🖼 다른 그림으로<input type="file" accept="image/*" data-routefile="' + path + '"></label>' +
+      (src ? '<button class="btn btn-ghost" data-act="routeEdit" data-path="' + path + '">✂ 그림 편집</button>' : '') +
+      (custom ? '<button class="btn btn-ghost" data-act="routeReset" data-path="' + path + '">↺ 기본 그림</button>' : '') + '</div></div>';
+  }
+  function viewPlanUnits() {
+    var P = PS(), pd = cur.docs.plan;
+    var h = '<p class="lead">작업계획서를 만들 장비를 누르세요. <b>장비마다 작업계획서가 한 부씩</b> 만들어집니다.</p>';
+    h += '<div class="chips big unit-add">' + P.types.map(function (t) { return '<button class="chip add" data-act="unitAdd" data-type="' + esc(t.id) + '">＋ ' + esc(t.name) + '</button>'; }).join('') + '</div>';
+    var shown = 0;
+    pd.units.forEach(function (u, ui) {
+      var Ty = PLANDOC.typeOf(P, u.type); if (!Ty) return;
+      shown++;
+      var base = 'docs.plan.units.' + ui;
+      h += '<div class="card unit"><div class="card-head"><b>' + esc(Ty.name) + ' 작업계획서</b><button class="btn btn-danger btn-sm" data-act="unitDel" data-i="' + ui + '">빼기</button></div>' +
+        driverSelect(base, u) +
+        attachBox(base + '.reg', '기계·장비 제원 서류', Ty.equipNote) +
+        attachBox(base + '.lic', '운전원 자격·면허 (있으면)', '운전면허증, 건설기계조종사면허증 등') +
+        routeBox(base + '.route', '운행경로 및 작업방법 그림') + '</div>';
+    });
+    if (!shown) h += '<p class="note">아직 장비가 없습니다. 위에서 장비를 눌러 추가하세요.</p>';
+    return h;
+  }
+  function viewPlanSurvey() {
+    return '<p class="lead">작업장소의 지형·지반 상태를 조사한 서류가 있으면 붙여 주세요. <b>없으면 그냥 「다음」</b>을 누르세요.</p>' +
+      attachBox('docs.plan.survey', '사전조사 내용', PS().surveyNote) +
+      '<p class="note">한글(.hwp)·워드(.docx) 파일은 PDF 화면에 그대로 보이게 넣을 수 없어 PDF 안에 「첨부파일」로 들어갑니다(인쇄 안 됨). 가능하면 PDF나 사진으로 넣어 주세요.</p>';
+  }
+
+  /* ===== 특별교육 (업체가 하는 일) ===== */
+  function viewEduInfo() {
+    var ed = cur.docs.sedu;
+    if (!ed.date) ed.date = cur.info.writeDate || D.today();
+    if (ed.time == null) ed.time = SS().timeText || '';
+    return '<p class="lead">안전교육일지에 들어갈 정보입니다. 다른 서류에 적은 내용은 함께 씁니다.</p>' +
+      field('업체명', 'info.company', { req: 1, ph: '예) ○○건설기계' }) +
+      field('대표자 성명', 'info.ceo', { req: 1, ph: '예) 홍길동' }) +
+      field('교육한 날', 'docs.sedu.date', { type: 'date' }) +
+      field('교육 시간', 'docs.sedu.time', { ph: '예) 09:00∼17:00 중 5H' });
+  }
+  function viewEduSurvey() {
+    var ed = cur.docs.sedu, n = cur.workers.filter(function (w) { return w.name; }).length;
+    if (!ed.instructors) { ed.instructors = clone(SS().instructors || []); save(); }
+    var h = '<div class="sv-card"><div class="sv-topic">교육 인원</div><div class="sv-q">근로자 ' + n + '명 모두 교육을 받았나요?</div>' +
+      '<div class="ox"><button class="ox-btn o' + (ed.allDone === 'O' ? ' on' : '') + '" data-act="eduAll" data-v="O"><span>⭕</span>예</button>' +
+      '<button class="ox-btn x' + (ed.allDone === 'X' ? ' on' : '') + '" data-act="eduAll" data-v="X"><span>❌</span>아니요</button></div>';
+    if (ed.allDone === 'X') {
+      h += '<div class="counter"><span>교육 못 받은 사람</span><button class="cbtn" data-act="absCnt" data-d="-1" aria-label="줄이기">－</button><b>' + (+ed.absent || 0) + '<small>명</small></b><button class="cbtn" data-act="absCnt" data-d="1" aria-label="늘리기">＋</button></div>' +
+        field('못 받은 이유', 'docs.sedu.reason', { ph: '예) 개인 사정' });
+    }
+    h += '</div><h3 class="sec">교육 실시자 및 장소</h3><p class="hint">교육을 한 사람과 장소를 적어 주세요.</p>';
+    ed.instructors.forEach(function (r, i) {
+      h += '<div class="card"><div class="card-head"><b>교육 실시자 ' + (i + 1) + '</b>' + (ed.instructors.length > 1 ? '<button class="btn btn-danger btn-sm" data-act="insDel" data-i="' + i + '">삭제</button>' : '') + '</div>' +
+        field('성명', 'docs.sedu.instructors.' + i + '.name', { ph: '예) 홍길동' }) + field('직명', 'docs.sedu.instructors.' + i + '.title', { ph: '예) 안전담당자' }) +
+        field('교육실시 장소', 'docs.sedu.instructors.' + i + '.place', { ph: '예) 2층 대회의실' }) + '</div>';
+    });
+    return h + '<button class="btn btn-ghost btn-big" data-act="insAdd">＋ 교육 실시자 추가</button>';
+  }
+
   /* 6. 완성 */
-  function viewDone() {
+  function viewDone() { return doc === 'plan' ? viewDonePlan() : doc === 'sedu' ? viewDoneEdu() : viewDoneRA(); }
+  function checksHtml(checks) {
+    var h = '<div class="checks">' + checks.map(function (c) {
+      return '<div class="chk ' + (c[0] ? 'ok' : 'no') + '"><span>' + (c[0] ? '✔' : '!') + ' ' + c[1] + '</span>' + (c[0] ? '' : '<button class="btn btn-sm btn-ghost" data-act="goto" data-i="' + c[2] + '">채우러 가기</button>') + '</div>';
+    }).join('') + '</div>';
+    if (checks.some(function (c) { return !c[0]; })) h += '<p class="note">빠진 것이 있어도 PDF는 만들 수 있습니다. 빈칸은 비워진 채로 나옵니다.</p>';
+    return h;
+  }
+  function pdfButtons() {
+    return '<button class="btn btn-primary btn-huge" data-act="pdf">📄 PDF 받기</button>' +
+      '<button class="btn btn-ghost btn-big" data-act="pdfView">👀 PDF 미리 보기</button>' +
+      '<p class="note">처음 만들 때는 글꼴을 받느라 10~20초 걸릴 수 있어요.</p>' + signGuide();
+  }
+  function stat(n, l) { return '<div class="stat"><div class="num">' + n + '</div><div class="lbl">' + l + '</div></div>'; }
+  function viewDonePlan() {
+    var i = cur.info, pd = cur.docs.plan, P = PS();
+    var units = pd.units.filter(function (u) { return PLANDOC.typeOf(P, u.type); });
+    var nW = cur.workers.filter(function (x) { return x.name; }).length;
+    var nA = (pd.survey || []).length + units.reduce(function (a, u) { return a + (u.reg || []).length + (u.lic || []).length; }, 0);
+    var hasDrv = function (u) { return u.driver !== '' && u.driver != null && cur.workers[+u.driver]; };
+    return '<div class="statbar">' + stat(units.length, '장비') + stat(nW, '근로자') + stat(nA, '첨부') + '</div>' + checksHtml([
+      [!!i.company, '업체명', 0], [!!i.ceo, '대표자 성명', 0], [!!pd.workName, '작업명(장소)', 0], [!!pd.start && !!pd.end, '작업기간', 0],
+      [nW > 0, '근로자 이름', 1], [units.length > 0, '장비 추가', 2],
+      [units.length > 0 && units.every(hasDrv), '장비마다 운전원 고르기', 2],
+      [units.length > 0 && units.every(function (u) { return (u.reg || []).length; }), '장비 서류(등록증 등) 붙이기', 2]
+    ]) + pdfButtons();
+  }
+  function viewDoneEdu() {
+    var i = cur.info, ed = cur.docs.sedu;
+    var nW = cur.workers.filter(function (x) { return x.name; }).length;
+    var nP = SEDU_SLOTS.filter(function (s) { return cur.photos[s.k]; }).length;
+    return '<div class="statbar">' + stat(nW, '참석자') + stat(ed.allDone === 'X' ? nW - (+ed.absent || 0) : nW, '이수자') + stat(nP + '/' + SEDU_SLOTS.length, '사진') + '</div>' + checksHtml([
+      [!!i.company, '업체명', 0], [!!ed.date, '교육한 날', 0], [nW > 0, '근로자(참석자) 이름', 1], [!!ed.allDone, '교육 인원 답하기', 2],
+      [(ed.instructors || []).some(function (r) { return r.name; }), '교육 실시자 이름', 2], [nP === SEDU_SLOTS.length, '사진 (' + nP + '/' + SEDU_SLOTS.length + ')', 3]
+    ]) + pdfButtons();
+  }
+  function viewDoneRA() {
     var i = cur.info, w = L.walk(cur.answers, cur.accident), ev = L.evalSummary(cur);
     var nW = cur.workers.filter(function (x) { return x.name; }).length;
     var nP = PHOTO_SLOTS.filter(function (s) { return cur.photos[s.k]; }).length;
@@ -423,8 +617,52 @@
     if (checks.some(function (c) { return !c[0]; })) h += '<p class="note">빠진 것이 있어도 PDF는 만들 수 있습니다. 빈칸은 비워진 채로 나옵니다.</p>';
     h += '<button class="btn btn-primary btn-huge" data-act="pdf">📄 PDF 받기</button>' +
       '<button class="btn btn-ghost btn-big" data-act="pdfView">👀 PDF 미리 보기</button>' +
-      '<p class="note">PDF를 받은 뒤 <b>출력해서 서명칸에 서명</b>하세요.<br>처음 만들 때는 글꼴을 받느라 10~20초 걸릴 수 있어요.</p>';
+      '<p class="note">처음 만들 때는 글꼴을 받느라 10~20초 걸릴 수 있어요.</p>' + signGuide();
     return h;
+  }
+
+  /* ---------- 서명할 곳 안내 (PDF를 만들 때 쪽 번호를 알아냄) ---------- */
+  var SIGN_SPOTS = [
+    { id: 'sig_policy', doc: '안전보건방침', where: '맨 아래 가운데 「대표 ○○○ (서 명)」 자리', who: '사장' },
+    { id: 'sig_rules', doc: '위험성평가 실시규정 (첫 장)', where: '오른쪽 위 결재칸 「근로자」·「사 장」 두 칸', who: '근로자 1명 + 사장' },
+    { id: 'sig_info_', doc: '안전ㆍ보건상 위험정보 표', where: '오른쪽 위 「평가자 ○○○ (인)」 자리', who: '사장' },
+    { id: 'sig_res_', doc: '위험성평가 결과서 (초록색 표)', where: '오른쪽 위 「평가자 ○○○ (인)」 자리와, 맨 오른쪽 「사 장」 칸 (줄마다)', who: '사장' },
+    { id: 'sig_iv_', doc: '근로자 청취조사표', where: '경험담마다 「성 명 : ○○○ (인)」 자리', who: '이름이 적힌 근로자' }
+  ];
+  function pageText(list) {
+    if (!list || !list.length) return '';
+    list = list.slice().sort(function (a, b) { return a - b; });
+    var out = [], st = list[0], pv = list[0];
+    for (var i = 1; i <= list.length; i++) {
+      var n = list[i];
+      if (n === pv + 1) { pv = n; continue; }
+      out.push(st === pv ? st + '쪽' : st + '~' + pv + '쪽'); st = pv = n;
+    }
+    return out.join(', ');
+  }
+  function signSpots() {
+    if (doc === 'plan') {
+      var ap = PS().approvals || [];
+      return [{ id: 'sig_plan_', doc: '작업계획서 (장비마다 첫 장)', where: '맨 위 오른쪽 결재칸 「' + ap.map(function (a) { return a.label; }).join('」·「') + '」의 (인) 자리', who: ap.length > 1 ? '결재칸마다 해당하는 분 (사업주 칸은 사장)' : '사장' }];
+    }
+    if (doc === 'sedu') {
+      var ae = SS().approvals || [];
+      return [{ id: 'sig_edu', doc: '안전교육일지 (첫 장)', where: '맨 위 오른쪽 결재칸 「' + ae.map(function (a) { return a.label; }).join('」·「') + '」 아래 빈칸', who: '사장' },
+        { id: 'sig_roster', doc: '교육 참석자 명단', where: '이름 옆 「서 명」 칸', who: '교육받은 근로자 각자' }];
+    }
+    return SIGN_SPOTS;
+  }
+  function signGuide() {
+    var sp = (cur.docs[doc] && cur.docs[doc].sigPages) || null;
+    var rows = signSpots().map(function (s) {
+      var pg = [];
+      if (sp) Object.keys(sp).forEach(function (k) { if (k === s.id || (s.id.slice(-1) === '_' && k.indexOf(s.id) === 0)) pg = pg.concat(sp[k]); });
+      pg = pg.filter(function (v, i, a) { return a.indexOf(v) === i; });
+      return '<li><div class="sg-pg">' + (sp ? (pg.length ? pageText(pg) : '-') : '?쪽') + '</div><div class="sg-t"><b>' + esc(s.doc) + '</b><span>' + esc(s.where) + '</span><em>✍ ' + esc(s.who) + '</em></div></li>';
+    }).join('');
+    return '<div class="sign-guide"><h3>✍ 출력한 뒤 서명할 곳</h3>' +
+      (sp ? '' : '<p class="note">PDF를 받거나 미리 보면 몇 쪽인지 표시됩니다. 쪽 번호는 각 쪽 맨 아래에 있어요.</p>') +
+      '<ol>' + rows + '</ol></div>';
   }
 
   /* ---------- 보고서 기본 내용 설정 (모든 업체 공통) ---------- */
@@ -477,8 +715,27 @@
     '@eval': '수급업체 산업재해예방 조치능력 평가표', budget: '안전 예산 현황', danger: '위험작업 관리계획', ppe: '개인보호구',
     insp: '안전점검 계획', eduRec: '교육실적', emer: '비상대책'
   };
+  function docChapters() {
+    if (doc === 'plan') return [
+      { no: '1', title: '작업계획서 공통', items: ['p_common'] },
+      { no: '2', title: '장비별 작업계획서', items: PS().types.map(function (t) { return 'pt_' + t.id; }), addType: true }
+    ];
+    if (doc === 'sedu') return [
+      { no: '1', title: '안전교육일지', items: ['e_log'] },
+      { no: '2', title: '교육 참석자 명단 · 사진대지', fixed: '업체의 근로자 명단과 사진으로 자동으로 채워집니다. 고칠 내용이 없습니다.' }
+    ];
+    return CHAPTERS;
+  }
+  function typeIdx(tid) { var ts = (cur && cur.plan ? cur.plan : PS()).types; for (var i = 0; i < ts.length; i++) if (ts[i].id === tid) return i; return -1; }
+  function secTitle(id) {
+    if (id === 'p_common') return '결재칸 · 유도자 · 별첨 문구';
+    if (/^pt_/.test(id)) { var ti = typeIdx(id.slice(3)); return ti >= 0 ? cur.plan.types[ti].name + ' 작업계획서' : '(지운 장비)'; }
+    if (id === 'e_log') return '안전교육일지';
+    return SEC_TITLE[id];
+  }
   function secNo(id) {
-    for (var c = 0; c < CHAPTERS.length; c++) { var it = CHAPTERS[c].items || []; var i = it.indexOf(id); if (i >= 0) return CHAPTERS[c].no + '-' + (i + 1); }
+    var ch = docChapters();
+    for (var c = 0; c < ch.length; c++) { var it = ch[c].items || []; var i = it.indexOf(id); if (i >= 0) return ch[c].no + '-' + (i + 1); }
     return '';
   }
   var ROWF = {
@@ -494,7 +751,14 @@
     'edit.ppe.rows': [{ k: 'plan', l: '지급계획', t: 'area' }, { k: 'note', l: '비고' }],
     'edit.inspection': [{ k: 'proc', l: '공정' }, { k: 'risk', l: '위험요소', t: 'area' }, { k: 'check', l: '안전점검사항', t: 'area' }, { k: 'note', l: '비고' }],
     'edit.eduRecord': [{ k: 'kind', l: '구분' }, { k: 'target', l: '대상' }, { k: 'std', l: '기준' }, { k: 'done', l: '실시', pick: [['auto', '자동(질문 답)'], ['O', 'O'], ['X', 'X']] }, { k: 'note', l: '비고' }],
-    'edit.emergencyFlow': [{ k: 'step', l: '단계' }, { k: 'text', l: '내용', t: 'area' }]
+    'edit.emergencyFlow': [{ k: 'step', l: '단계' }, { k: 'text', l: '내용', t: 'area' }],
+    'plan.approvals': [{ k: 'label', l: '칸 이름 (예: 검토자, 담당자)' }, { k: 'who', l: '칸 안의 글 (뒤에 「(인)」이 붙음. 「사업주」라고 적으면 대표자 이름도 들어감)' }],
+    'plan.types.checks': [{ k: 'group', l: '구분 (위아래 같은 구분끼리 칸이 합쳐짐)' }, { k: 'text', l: '점검 항목', t: 'area' }, { k: 'note', l: '작은 글씨 설명 (예: * 관련 법)', t: 'area' }, { k: 'hi', l: '파란 굵은 글씨로 강조', bool: 1 }, { k: 'action', l: '안전조치 (미리 적어 둘 내용 · 보통 비워 둠)' }],
+    'plan.types.steps': [{ k: 'work', l: '작업내용 (위아래 같은 작업끼리 칸이 합쳐짐)' }, { k: 'risk', l: '위험요인', t: 'area' }, { k: 'fix', l: '제거대책', t: 'area' }],
+    'sedu.approvals': [{ k: 'label', l: '결재칸 이름 (예: 담당자, 관리감독자)' }],
+    'sedu.kinds': [{ k: 'label', l: '교육구분 이름' }, { k: 'on', l: '■ 표시', bool: 1 }],
+    'sedu.materials': [{ k: 'label', l: '교육자료 이름' }, { k: 'on', l: '■ 표시', bool: 1 }],
+    'sedu.instructors': [{ k: 'name', l: '성명' }, { k: 'title', l: '직명' }, { k: 'place', l: '교육실시 장소' }]
   };
   var ROWT = {
     'edit.patrol': { text: '', type: '' }, 'edit.cases': { kind: '부상', year: '', org: '', text: '', note: '' },
@@ -504,6 +768,12 @@
     'edit.dangerWork': { work: '', place: '', detail: '', yes: true }, 'edit.ppe.rows': { plan: '', note: '' },
     'edit.inspection': { proc: '', risk: '· ', check: '· ', note: '' }, 'edit.eduRecord': { kind: '', target: '근로자', std: '-', done: 'O', note: '' },
     'edit.emergencyFlow': { step: '', text: '▪ ' },
+    'plan.approvals': { label: '담당자', who: '' },
+    'plan.types.checks': { group: '작업 중 조치', text: '', note: '', hi: false, action: '' },
+    'plan.types.steps': { work: '', risk: '', fix: '' },
+    'sedu.approvals': { label: '관리감독자' }, 'sedu.kinds': { label: '', on: false }, 'sedu.materials': { label: '', on: false },
+    'sedu.instructors': { name: '', title: '', place: '' },
+    'sedu.blocks': { head: '[작업 이름 : 기간제 작업원 {N}명] (00:00～00:00, 1시간)', items: ['그 밖에 안전·보건관리에 필요한 사항'] },
     'edit.resultTables.rows': { task: '', cls: '1. 기계설비적요인', situation: '', measure: '', cases: '', p: 1, s: 2, redNo: '', redText: '', after: '', plan: '', done: '', owner: '' }
   };
   function norm(path) { return path.replace(/\.\d+\./g, '.'); }   // edit.resultTables.0.rows → edit.resultTables.rows
@@ -593,7 +863,7 @@
       (rv >= 4 ? '<div class="warn">위험성이 ' + lv + '입니다. 감소대책을 적어 주세요.</div>' : '') +
       '<details class="sub"' + (rv >= 4 || r.redText ? ' open' : '') + '><summary>감소대책 · 개선 (선택)</summary>' +
       field('NO', p + '.redNo') + field('감소대책 세부내용', p + '.redText', { type: 'area' }) + field('개선후 위험성', p + '.after') +
-      field('개선 예정일', p + '.plan') + field('완료일', p + '.done') + field('담당자', p + '.owner') + '</details>';
+      field('개선 예정일', p + '.plan') + field('완료일', p + '.done') + '</details>';
   }
   function rows(listPath, label, cellsFn) {
     return (getP(cur, listPath) || []).map(function (it, i) {
@@ -713,11 +983,11 @@
         return '<div class="tbl">' + tblBar('result', t) + '<div class="rp-wrap"><table class="rt wide res">' +
           '<tr><th colspan="2" class="g">공정명</th>' + procCell('result', t, ' colspan="2"') + '<td colspan="6" rowspan="2" class="ttl green">위험성평가 결과서</td><th colspan="2" class="g">평가일자</th><td colspan="2">' + au('작성일') + '</td></tr>' +
           '<tr><th colspan="2" class="g">세부공정명</th>' + fld('result.' + t + '.sub', '세부공정명', base + '.sub', { attrs: ' colspan="2"', type: 'text' }) + '<th colspan="2" class="g">평 가 자</th><td colspan="2">' + au('대표자') + '</td></tr>' +
-          '<tr><th rowspan="2" class="g">세부작업</th><th colspan="2" class="g">유해위험요인 파악</th><th rowspan="2" class="g">현재 안전보건조치</th><th rowspan="2" class="g">재해사례</th><th colspan="3" class="g">현재 위험성</th><th colspan="2" class="g">감소대책</th><th rowspan="2" class="g">개선후<br>위험성</th><th rowspan="2" class="g">개선<br>예정일</th><th rowspan="2" class="g">완료일</th><th rowspan="2" class="g">담당자</th></tr>' +
+          '<tr><th rowspan="2" class="g">세부작업</th><th colspan="2" class="g">유해위험요인 파악</th><th rowspan="2" class="g">현재 안전보건조치</th><th rowspan="2" class="g">재해사례</th><th colspan="3" class="g">현재 위험성</th><th colspan="2" class="g">감소대책</th><th rowspan="2" class="g">개선후<br>위험성</th><th rowspan="2" class="g">개선<br>예정일</th><th rowspan="2" class="g">완료일</th><th rowspan="2" class="g">사 장</th></tr>' +
           '<tr><th class="g">위험분류</th><th class="g">유해・위험 상황 및 결과</th><th class="g">가능성</th><th class="g">중대성</th><th class="g">위험성</th><th class="g">NO</th><th class="g">세부내용</th></tr>' +
           rows(base + '.rows', '위험요인', function (r) {
             var v = (+r.p || 0) * (+r.s || 0);
-            return '<td>' + nl(r.task) + '</td><td>' + nl(r.cls) + '</td><td class="l">' + nl(r.situation) + '</td><td class="l">' + nl(r.measure) + '</td><td>' + nl(r.cases) + '</td><td>' + (r.p || '') + '</td><td>' + (r.s || '') + '</td><td>' + (v ? v + '<br>(' + (v >= 6 ? '높음' : v === 4 ? '보통' : '낮음') + ')' : '') + '</td><td>' + nl(r.redNo) + '</td><td class="l">' + nl(r.redText) + '</td><td>' + nl(r.after) + '</td><td>' + nl(r.plan) + '</td><td>' + nl(r.done) + '</td><td>' + nl(r.owner) + '</td>';
+            return '<td>' + nl(r.task) + '</td><td>' + nl(r.cls) + '</td><td class="l">' + nl(r.situation) + '</td><td class="l">' + nl(r.measure) + '</td><td>' + nl(r.cases) + '</td><td>' + (r.p || '') + '</td><td>' + (r.s || '') + '</td><td>' + (v ? v + '<br>(' + (v >= 6 ? '높음' : v === 4 ? '보통' : '낮음') + ')' : '') + '</td><td>' + nl(r.redNo) + '</td><td class="l">' + nl(r.redText) + '</td><td>' + nl(r.after) + '</td><td>' + nl(r.plan) + '</td><td>' + nl(r.done) + '</td><td>' + ph('사장 서명') + '</td>';
           }) + '</table></div>' + addBtn(base + '.rows', '위험요인') + '</div>';
       }).join('') + tblAddBtn('result');
     },
@@ -785,6 +1055,107 @@
         '</table></div>' + addBtn('edit.emergencyFlow', '단계') + '<p class="rp-p">□ 재해발생 시 유관기관 연락망 ' + au('업체가 비상연락처 화면에서 입력') + '</p>';
     }
   };
+  /* --- 작업계획서 · 특별교육 기본 내용 (도로공사가 고침) --- */
+  function pageFor(id) {
+    if (PAGES[id]) return PAGES[id]();
+    if (id === 'p_common') return planCommonPage();
+    if (/^pt_/.test(id)) return planTypePage(id.slice(3));
+    if (id === 'e_log') return eduLogPage();
+    return '';
+  }
+  function canReset(id) {
+    if (/^pt_/.test(id)) return DOCTPL.PLAN.types.some(function (t) { return 'pt_' + t.id === id; });
+    return !!(SEC_PATHS[id] || id === 'p_common' || id === 'e_log');
+  }
+  function resetSection(id) {
+    if (SEC_PATHS[id]) { SEC_PATHS[id].forEach(function (p) { cur.edit[p] = clone(T.DEFAULT_EDIT[p]); }); T.upgradeEdit(cur.edit); return; }
+    if (id === 'p_common') { ['approvals', 'guide', 'surveyNote', 'driverNote'].forEach(function (k) { cur.plan[k] = clone(DOCTPL.PLAN[k]); }); return; }
+    if (id === 'e_log') { cur.sedu = DOCTPL.fillSedu(null); return; }
+    if (/^pt_/.test(id)) {
+      var def = DOCTPL.PLAN.types.filter(function (t) { return 'pt_' + t.id === id; })[0], ti = typeIdx(id.slice(3));
+      if (def && ti >= 0) cur.plan.types[ti] = clone(def);
+    }
+  }
+  function cellTd(key, label, html, attrs, renderFn, del) { reg(key, label, renderFn, del); return '<td' + (attrs || '') + edAttr(key) + '>' + html + '</td>'; }
+  function planCommonPage() {
+    var P = cur.plan, apv = P.approvals;
+    var h = '<h3 class="rp-h">작업계획서 머리 표 <small>(모든 장비에 똑같이 들어감)</small></h3><div class="rp-wrap"><table class="rt">' +
+      '<colgroup><col style="width:17%"><col style="width:10%"><col><col style="width:12%"><col style="width:27%"></colgroup>';
+    apv.forEach(function (a, i) {
+      var key = rowReg('plan.approvals', i, '결재칸');
+      h += '<tr>' + (i === 0 ? '<td colspan="3" rowspan="' + apv.length + '" class="ttl2">' + ph('○○ 작업계획서') + '<br><small>(장비마다 바뀜)</small></td>' : '') +
+        '<th class="ed-c" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + nl(a.label) + '</th>' +
+        '<td class="ed-c" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + nl(a.who) + (/사\s*업\s*주/.test(a.who || '') ? ' ' + au('대표자 이름') : '') + ' (인)' + rowX('plan.approvals', i) + '</td></tr>';
+    });
+    h += '<tr><th>작업명(장소)</th><td colspan="2">' + ph() + '</td><th>작업기간</th><td>' + ph() + '</td></tr>' +
+      '<tr><th>작업업체/작업자</th><th>업체명</th><td>' + au('업체명') + '</td><th>작업자</th><td>' + au('근로자 이름') + '</td></tr>' +
+      '<tr><th>운전원</th><th>성명</th>' + cellTd('plan.driverNote', '운전원 이름 뒤에 붙는 말', ph('업체가 고름') + ' ' + nl(P.driverNote), '', function () { return field('운전원 이름 뒤에 붙는 말', 'plan.driverNote', {}); }) + '<th>연락처</th><td>' + au('자동') + '</td></tr>' +
+      '<tr><th>유도자</th><th>성명</th>' + fld('plan.guide.name', '유도자 성명', 'plan.guide.name', { type: 'text' }) + '<th>연락처</th>' + fld('plan.guide.phone', '유도자 연락처', 'plan.guide.phone', { type: 'text' }) + '</tr>' +
+      '<tr><th>사전조사 내용</th>' + cellTd('plan.surveyNote', '사전조사 내용 문구', '[별첨] ' + nl(P.surveyNote) + ' ' + au('업체가 서류를 붙임'), ' colspan="4" style="text-align:left"', function () { return field('사전조사 내용 문구', 'plan.surveyNote', { type: 'area', rows: 3 }); }) + '</tr>' +
+      '<tr><th>기계·장비 제원</th><td colspan="4" style="text-align:left">[별첨] ' + au('장비마다 따로 (2장에서 고침)') + '</td></tr></table></div>' + addBtn('plan.approvals', '결재칸');
+    return h;
+  }
+  function planTypePage(tid) {
+    var P = cur.plan, ti = typeIdx(tid), Ty = P.types[ti];
+    if (!Ty) return '<p class="note">지운 장비입니다.</p>';
+    var base = 'plan.types.' + ti;
+    var tKey = reg(base + '.title', '장비 이름 · 부제목', function () { return field('장비 이름', base + '.name', {}) + field('부제목 (「-」와 「-」 사이)', base + '.sub', {}); });
+    var h = '<div class="tbl-bar"><span><b>' + esc(Ty.name) + '</b> 작업계획서</span>' + (P.types.length > 1 ? '<button type="button" class="tbl-x" data-act="typeDel" data-t="' + ti + '" title="이 장비 종류 지우기" aria-label="이 장비 종류 지우기">✕</button>' : '') + '</div>';
+    h += '<div class="rp-wrap"><table class="rt"><colgroup><col style="width:17%"><col style="width:10%"><col><col style="width:12%"><col style="width:27%"></colgroup>' +
+      '<tr><td colspan="3"' + edAttr(tKey) + '><b class="pt-t">' + esc(Ty.name) + ' 작업계획서</b><br><small>- ' + esc(Ty.sub) + ' -</small></td><th>' + esc((P.approvals[0] || {}).label || '') + '</th><td>' + au('결재칸은 1장 공통') + '</td></tr>' +
+      '<tr><th>작업명(장소)</th><td colspan="2">' + ph() + '</td><th>작업기간</th><td>' + ph() + '</td></tr>' +
+      '<tr><th>운전원 · 유도자</th><td colspan="4">' + au('업체 입력 · 1장 공통') + '</td></tr>' +
+      '<tr><th>사전조사 내용</th><td colspan="4" style="text-align:left">[별첨] ' + esc(P.surveyNote) + ' ' + au('1장 공통') + '</td></tr>' +
+      '<tr><th>기계·장비 제원</th>' + cellTd(base + '.equipNote', '기계·장비 제원 문구', '[별첨] ' + nl(Ty.equipNote) + ' ' + au('업체가 서류를 붙임'), ' colspan="4" style="text-align:left"', function () { return field('기계·장비 제원 문구', base + '.equipNote', { type: 'area', rows: 3 }); }) + '</tr></table></div>';
+    var ck = Ty.checks || [];
+    h += '<div class="rp-wrap"><table class="rt"><colgroup><col style="width:14%"><col><col style="width:7%"><col style="width:8%"><col style="width:17%"></colgroup><tr><th>구분</th><th>점검 항목</th><th>적정</th><th>부적정</th><th>안전조치</th></tr>' +
+      rows(base + '.checks', '점검 항목', function (it, i) {
+        var first = i === 0 || ck[i - 1].group !== it.group;
+        return '<td>' + (first ? '<b>' + nl(it.group) + '</b>' : '<span class="dim">〃</span>') + '</td><td class="l' + (it.hi ? ' hi' : '') + '">' + (i + 1) + '. ' + nl(it.text) + (it.note ? '<br><small>' + nl(it.note) + '</small>' : '') + '</td><td>□</td><td>□</td><td class="sm">' + nl(it.action) + '</td>';
+      }) + '</table></div>' + addBtn(base + '.checks', '점검 항목');
+    h += '<h4 class="rp-sub">□ 운행경로 및 작업방법</h4>' + routeBox(base + '.route', '운행경로 및 작업계획 도면 (업체도 바꿀 수 있음)');
+    var st = Ty.steps || [];
+    h += '<div class="rp-wrap"><table class="rt"><colgroup><col style="width:6%"><col style="width:22%"><col><col></colgroup><tr><th colspan="2">작업내용(순서)</th><th>위험요인</th><th>제거대책</th></tr>' +
+      rows(base + '.steps', '작업 순서', function (x, i) { var first = i === 0 || st[i - 1].work !== x.work; return '<td>' + (i + 1) + '</td><td>' + (first ? nl(x.work) : '<span class="dim">〃</span>') + '</td><td>' + nl(x.risk) + '</td><td>' + nl(x.fix) + '</td>'; }) +
+      '</table></div>' + addBtn(base + '.steps', '작업 순서');
+    return h;
+  }
+  function eduLogPage() {
+    var S = cur.sedu, ap = S.approvals || [];
+    var tKey = reg('sedu.title', '제목 · 부제목', function () { return field('제목', 'sedu.title', {}) + field('부제목', 'sedu.subtitle', {}); });
+    var h = '<div class="rp-wrap"><table class="rt"><colgroup><col><col style="width:5%">' + ap.map(function () { return '<col style="width:15%">'; }).join('') + '</colgroup>' +
+      '<tr><td rowspan="2"' + edAttr(tKey) + '><b class="pt-t">' + esc(S.title) + '</b><br><b>' + esc(S.subtitle) + '</b></td><th rowspan="2">결<br><br>재</th>' +
+      ap.map(function (a, i) { var k = rowReg('sedu.approvals', i, '결재칸'); return '<th class="ed-c" data-act="edOpen" data-ed="' + esc(k) + '" title="눌러서 수정">' + nl(a.label) + rowX('sedu.approvals', i) + '</th>'; }).join('') + '</tr>' +
+      '<tr>' + ap.map(function () { return '<td class="sign">' + ph('서명') + '</td>'; }).join('') + '</tr></table></div>' + addBtn('sedu.approvals', '결재칸');
+    var kinds = S.kinds || [], kb = '';
+    for (var i = 0; i < kinds.length; i += 2) {
+      kb += '<tr>' + (i === 0 ? '<th rowspan="' + Math.ceil(kinds.length / 2) + '">교육구분</th>' : '');
+      [i, i + 1].forEach(function (j) {
+        var k = kinds[j];
+        if (!k) { kb += '<td></td>'; return; }
+        var key = rowReg('sedu.kinds', j, '교육구분');
+        kb += '<td class="l ed-c" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + (j + 1) + '. ' + (k.on ? '■' : '□') + ' ' + nl(k.label) + rowX('sedu.kinds', j) + '</td>';
+      });
+      kb += '</tr>';
+    }
+    var mats = (S.materials || []).map(function (m, j) { var key = rowReg('sedu.materials', j, '교육자료'); return '<span class="mat ed-c" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정">' + nl(m.label) + ' ' + (m.on ? '■' : '□') + rowX('sedu.materials', j) + '</span>'; }).join('');
+    var etcKey = reg('sedu.materialEtc', '교육자료 › 기타', function () { return field('기타', 'sedu.materialEtc', {}); });
+    var blocks = (S.blocks || []).map(function (bl, bi) {
+      var key = reg('sedu.blocks.' + bi, '교육내용 묶음 ' + (bi + 1) + ' 제목', function () { return field('묶음 제목', 'sedu.blocks.' + bi + '.head', { type: 'area', rows: 2, hint: '{N} 은 참석 근로자 수로 바뀝니다.' }); }, canDel('sedu.blocks') ? function () { return delRow('sedu.blocks', bi, true); } : null);
+      return '<div class="edu-blk"><div' + edAttr(key) + '><b>' + nl(bl.head) + '</b>' + rowX('sedu.blocks', bi) + '</div>' + lines('sedu.blocks.' + bi + '.items', '교육내용', '○ ') + addBtn('sedu.blocks.' + bi + '.items', '내용') + '</div>';
+    }).join('');
+    h += '<div class="rp-wrap"><table class="rt"><colgroup><col style="width:14%"><col><col></colgroup>' +
+      '<tr><th>교육일시</th>' + cellTd('sedu.timeText', '교육 시간 (기본값)', ph('교육한 날') + ' ' + nl(S.timeText), ' colspan="2" style="text-align:left"', function () { return field('교육 시간 기본값 (업체가 바꿀 수 있음)', 'sedu.timeText', {}); }) + '</tr>' + kb +
+      '<tr><th>교육인원</th><td colspan="2">' + au('근로자 수와 「교육 확인」 답으로 자동') + '</td></tr>' +
+      '<tr><th>교육제목</th>' + fld('sedu.eduTitle', '교육제목', 'sedu.eduTitle', { attrs: ' colspan="2"', type: 'text' }) + '</tr>' +
+      '<tr><th>교육자료</th><td colspan="2"><div class="mats">' + mats + '<span class="mat"' + edAttr(etcKey).replace(' class="ed"', ' class="ed mat"') + '>기타 ' + nl(S.materialEtc) + '</span></div></td></tr>' +
+      '<tr><th>교육내용</th><td colspan="2" class="l">' + blocks + addBtn('sedu.blocks', '교육내용 묶음') + '</td></tr></table></div>' + addBtn('sedu.kinds', '교육구분') + addBtn('sedu.materials', '교육자료');
+    h += '<div class="rp-wrap"><table class="rt"><colgroup><col style="width:14%"><col><col><col></colgroup>' +
+      '<tr><th rowspan="' + ((S.instructors || []).length + 1) + '">교육 실시자<br>및 장소<br><small>(업체가 고칠 수 있는 기본값)</small></th><th>성 명</th><th>직 명</th><th>교육실시 장소</th></tr>' +
+      (S.instructors || []).map(function (r, i) { var key = rowReg('sedu.instructors', i, '교육 실시자 기본값'); return '<tr class="ed-row" data-act="edOpen" data-ed="' + esc(key) + '" title="눌러서 수정"><td>' + (nl(r.name) || ph('업체 입력')) + '</td><td>' + nl(r.title) + '</td><td>' + nl(r.place) + rowX('sedu.instructors', i) + '</td></tr>'; }).join('') +
+      '</table></div>' + addBtn('sedu.instructors', '교육 실시자');
+    return h;
+  }
   /* 항목마다 「원본으로 되돌리기」 할 때 되돌릴 내용 */
   var SEC_PATHS = {
     process: ['processes'], equip: ['infoTables'], patrol: ['patrol'], cases: ['cases'], msds: ['msds'],
@@ -797,8 +1168,8 @@
   function viewSettings() {
     var rv = cur.reviewed || {};
     if (!setSec) {
-      var h = '<p class="lead">보고서 목차 순서대로 정리했습니다. 항목을 누르면 <b>보고서의 표 모양 그대로</b> 나옵니다. 바꾼 내용은 <b>모든 업체의 보고서에 똑같이</b> 들어갑니다.</p>';
-      CHAPTERS.forEach(function (ch) {
+      var h = '<p class="lead">' + DOCS[doc].name + ' 서류 순서대로 정리했습니다. 항목을 누르면 <b>서류의 표 모양 그대로</b> 나옵니다. 바꾼 내용은 <b>모든 업체의 서류에 똑같이</b> 들어갑니다.</p>';
+      docChapters().forEach(function (ch) {
         h += '<section class="toc"><h3 class="toc-h"><span class="toc-no">' + ch.no + '</span>' + esc(ch.title) + '</h3>';
         if (ch.fixed) { h += '<p class="toc-fixed">🔒 ' + esc(ch.fixed) + '</p></section>'; return; }
         h += '<div class="set-list">';
@@ -809,17 +1180,17 @@
             return;
           }
           var st = rv[id];
-          h += '<button class="set-item" data-act="setOpen" data-sec="' + id + '"><span class="set-no">' + no + '</span><span class="set-t">' + esc(SEC_TITLE[id]) + '</span>' +
+          h += '<button class="set-item" data-act="setOpen" data-sec="' + id + '"><span class="set-no">' + no + '</span><span class="set-t">' + esc(secTitle(id)) + '</span>' +
             '<span class="set-st ' + (st || 'none') + '">' + (st === 'ok' ? '✔ 확인' : st === 'edited' ? '✎ 수정함' : '확인 전') + '</span></button>';
         });
-        h += '</div></section>';
+        h += '</div>' + (ch.addType ? '<button class="btn btn-ghost rp-addtbl" data-act="typeAdd">＋ 장비 종류 추가</button>' : '') + '</section>';
       });
       return h + '<button class="btn btn-primary btn-big" data-act="home">처음 화면으로</button>';
     }
     EDREG = {};
     return '<button class="btn btn-sm btn-ghost set-back" data-act="setBack">◀ 목차로</button>' +
-      '<div class="rp' + (showEd ? ' show-ed' : '') + '">' + PAGES[setSec]() + '</div>' +
-      '<button class="btn btn-ghost btn-reset" data-act="resetSec" data-sec="' + setSec + '">↺ 이 항목을 원본 내용으로 되돌리기</button>';
+      '<div class="rp' + (showEd ? ' show-ed' : '') + '">' + pageFor(setSec) + '</div>' +
+      (canReset(setSec) ? '<button class="btn btn-ghost btn-reset" data-act="resetSec" data-sec="' + setSec + '">↺ 이 항목을 원본 내용으로 되돌리기</button>' : '');
   }
   /* 넓은 표는 옆으로 밀지 않고 화면 폭에 맞게 줄여서 보여 줌 (손가락으로 벌리면 확대) */
   function fitTables() {
@@ -833,7 +1204,8 @@
   var fitT = null;
   window.addEventListener('resize', function () { clearTimeout(fitT); fitT = setTimeout(fitTables, 120); });
   function chapterOf(id) {
-    for (var c = 0; c < CHAPTERS.length; c++) if ((CHAPTERS[c].items || []).indexOf(id) >= 0) return CHAPTERS[c].no + '. ' + CHAPTERS[c].title;
+    var ch = docChapters();
+    for (var c = 0; c < ch.length; c++) if ((ch[c].items || []).indexOf(id) >= 0) return ch[c].no + '. ' + ch[c].title;
     return '';
   }
 
@@ -842,7 +1214,7 @@
     var m = document.getElementById('modal'), r = EDREG[memoKey];
     if (!r) { memoKey = null; closeModal(); return; }
     var old = m.querySelector('.memo-body'), st = old ? old.scrollTop : 0;
-    m.innerHTML = '<div class="memo" role="dialog" aria-label="고치기"><div class="memo-head"><div><small>' + esc(chapterOf(setSec)) + ' › ' + esc(SEC_TITLE[setSec]) + '</small><b>✎ ' + esc(r.label) + '</b></div>' +
+    m.innerHTML = '<div class="memo" role="dialog" aria-label="고치기"><div class="memo-head"><div><small>' + esc(chapterOf(setSec)) + ' › ' + esc(secTitle(setSec)) + '</small><b>✎ ' + esc(r.label) + '</b></div>' +
       '<button class="btn btn-sm btn-ghost" data-act="edCancel" aria-label="닫기">✕</button></div>' +
       '<div class="memo-body">' + r.render() + '</div>' +
       '<div class="memo-foot">' + (r.del ? '<button class="btn btn-danger" data-act="edDel">삭제</button>' : '') + '<span class="sp"></span>' +
@@ -850,8 +1222,10 @@
     m.hidden = false; m.classList.add('memo-on'); document.body.classList.add('noscroll');
     var nb = m.querySelector('.memo-body'); if (nb) nb.scrollTop = st;
   }
+  function snapAll() { return clone({ edit: cur.edit, plan: cur.plan, sedu: cur.sedu }); }
+  function restoreAll(sn) { cur.edit = sn.edit; cur.plan = sn.plan; cur.sedu = sn.sedu; }
   function openMemo(key, snapTaken) {
-    if (!snapTaken) memoSnap = clone(cur.edit);
+    if (!snapTaken) memoSnap = snapAll();
     memoKey = key; drawMemo();
     if (window.matchMedia && window.matchMedia('(hover: hover)').matches) {
       setTimeout(function () { var f = document.querySelector('.memo-body textarea, .memo-body input'); if (f) f.focus(); }, 30);
@@ -883,17 +1257,63 @@
   }
   function fileName() {
     var n = (cur.info.company || '업체').replace(/[\\/:*?"<>|\s]+/g, '_');
-    return '위험성평가_' + n + '_' + (cur.info.writeDate || D.today()).replace(/-/g, '') + '.pdf';
+    var d = doc === 'sedu' ? (cur.docs.sedu.date || D.today()) : doc === 'plan' ? D.today() : (cur.info.writeDate || D.today());
+    return { ra: '위험성평가_', plan: '작업계획서_', sedu: '특별교육_' }[doc] + n + '_' + d.replace(/-/g, '') + '.pdf';
+  }
+  function pdfBlob(dd) {
+    return new Promise(function (res, rej) { try { window.pdfMake.createPdf(dd).getBlob(function (b) { cur.docs[doc].sigPages = dd._sigPages || null; res(b); }); } catch (e) { rej(e); } });
+  }
+  function dataURLBytes(d) { var b = atob(String(d).split(',')[1] || ''), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+  var routeCache = {}, pdfLibLoad = null;
+  function unitRoute(u) { var Ty = PLANDOC.typeOf(PS(), u.type) || {}; return u.route || Ty.route || Ty.routeDefault || ''; }
+  /* 작업계획서: 그림 첨부는 쪽으로 넣고, PDF 첨부는 뒤에 이어 붙이고, 한글·워드는 PDF 안의 첨부파일로 */
+  function buildPlanPdf() {
+    var P = PS(), pd = cur.docs.plan;
+    var units = pd.units.filter(function (u) { return PLANDOC.typeOf(P, u.type); });
+    var atts = [], no = 1;
+    (pd.survey || []).forEach(function (f) { atts.push(Object.assign({}, f, { no: no++, title: '사전조사 내용', unit: null })); });
+    units.forEach(function (u, ui) {
+      var Ty = PLANDOC.typeOf(P, u.type);
+      (u.reg || []).forEach(function (f) { atts.push(Object.assign({}, f, { no: no++, title: (ui + 1) + '. ' + Ty.name + ' 기계·장비 제원', unit: ui })); });
+      (u.lic || []).forEach(function (f) { atts.push(Object.assign({}, f, { no: no++, title: (ui + 1) + '. ' + Ty.name + ' 운전원 자격·면허', unit: ui, lic: true })); });
+    });
+    var need = units.map(unitRoute).filter(function (x) { return x && x.indexOf('data:') !== 0 && !routeCache[x]; });
+    return Promise.all(need.map(function (x) { return fetchDataURL(x).then(function (d) { routeCache[x] = d; }).catch(function () {}); })).then(function () {
+      var dd = PLANDOC.build(cur, P, { attachments: atts, routeImage: function (u) { var x = unitRoute(u); return x.indexOf('data:') === 0 ? x : (routeCache[x] || null); } });
+      return new Promise(function (res, rej) { try { window.pdfMake.createPdf(dd).getBuffer(function (buf) { cur.docs.plan.sigPages = dd._sigPages || null; res(buf); }); } catch (e) { rej(e); } });
+    }).then(function (buf) {
+      var extra = atts.filter(function (a) { return a.kind !== 'image'; });
+      if (!extra.length) return new Blob([buf], { type: 'application/pdf' });
+      pdfLibLoad = pdfLibLoad || loadScript('lib/pdf-lib.min.js');
+      return pdfLibLoad.then(function () {
+        var PL = window.PDFLib;
+        return PL.PDFDocument.load(buf).then(function (main) {
+          var chain = Promise.resolve();
+          extra.forEach(function (a) {
+            chain = chain.then(function () {
+              var bytes = dataURLBytes(a.data);
+              var asFile = function () { return main.attach(bytes, a.name, { mimeType: a.mime || 'application/octet-stream', description: '별첨 ' + a.no + '. ' + a.title }); };
+              if (a.kind !== 'pdf') return asFile();
+              return PL.PDFDocument.load(bytes, { ignoreEncryption: true }).then(function (src) {
+                return main.copyPages(src, src.getPageIndices()).then(function (pages) { pages.forEach(function (pg) { main.addPage(pg); }); });
+              }).catch(asFile);
+            });
+          });
+          return chain.then(function () { return main.save(); }).then(function (b) { return new Blob([b], { type: 'application/pdf' }); });
+        });
+      });
+    });
   }
   function makePdf(preview) {
     var win = null;
     if (preview) { try { win = window.open('', '_blank'); if (win) win.document.write('<p style="font:20px sans-serif;padding:20px">PDF를 만드는 중입니다…</p>'); } catch (e) { win = null; } }
     busy(true, 'PDF를 만드는 중입니다…<br><small>처음에는 10~20초 걸릴 수 있어요</small>');
     prepPdf().then(function (flow) {
-      var dd = PDFDOC.build(cur, { flow: flow, edit: E() });
-      return new Promise(function (res, rej) { try { window.pdfMake.createPdf(dd).getBlob(res); } catch (e) { rej(e); } });
+      if (doc === 'plan') return buildPlanPdf();
+      if (doc === 'sedu') return pdfBlob(EDUDOC.build(cur, SS()));
+      return pdfBlob(PDFDOC.build(cur, { flow: flow, edit: E() }));
     }).then(function (blob) {
-      busy(false);
+      busy(false); save(true); if (view === 'step' && STEPS[stepIdx].key === 'done') rerender();
       var url = URL.createObjectURL(blob);
       if (preview && win) { win.location.href = url; return; }
       var a = document.createElement('a'); a.href = url; a.download = fileName(); document.body.appendChild(a); a.click(); a.remove();
@@ -939,10 +1359,10 @@
   /* ---------- 설정 파일로 저장 / 불러오기 (보고서 기본 내용 설정만. 업체 작성 내용은 들어가지 않음) ---------- */
   function exportAll() {
     if (!SET) { alert('저장할 설정이 없습니다.'); return; }
-    var payload = { app: 'risk_assessment', kind: 'settings', v: 3, savedAt: D.today(), settings: { edit: SET.edit, reviewed: SET.reviewed } };
+    var payload = { app: 'risk_assessment', kind: 'settings', v: 3, savedAt: D.today(), settings: { edit: SET.edit, reviewed: SET.reviewed, plan: SET.plan, sedu: SET.sedu } };
     var blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = '위험성평가_기본내용설정_' + D.today().replace(/-/g, '') + '.json';
+    a.download = '제설안전서류_기본내용설정_' + D.today().replace(/-/g, '') + '.json';
     document.body.appendChild(a); a.click(); a.remove();
     toast('설정 파일을 받았습니다. 「다운로드」 폴더에 있어요.');
   }
@@ -973,12 +1393,47 @@
     inp.click();
   }
 
+  /* ---------- 첨부 파일 (한글·워드·PDF·그림) ---------- */
+  function fileKind(f) {
+    var n = (f.name || '').toLowerCase();
+    if (/^image\//.test(f.type) || /\.(jpe?g|png|gif|webp|bmp|heic)$/.test(n)) return 'image';
+    if (f.type === 'application/pdf' || /\.pdf$/.test(n)) return 'pdf';
+    if (/\.hwpx?$/.test(n)) return 'hwp';
+    if (/\.docx?$/.test(n)) return 'doc';
+    return 'other';
+  }
+  function readDataURL(f) { return new Promise(function (res, rej) { var r = new FileReader(); r.onload = function () { res(r.result); }; r.onerror = rej; r.readAsDataURL(f); }); }
+  function afterAttach() {
+    if (view === 'settings') { cur.reviewed = cur.reviewed || {}; if (setSec) cur.reviewed[setSec] = 'edited'; }
+    save(true); rerender();
+  }
+  function addAttachments(path, files) {
+    if (!files.length) return;
+    var list = getP(cur, path); if (!list) { setP(cur, path, []); list = getP(cur, path); }
+    var chain = Promise.resolve(), added = 0;
+    files.forEach(function (f) {
+      chain = chain.then(function () {
+        var kind = fileKind(f);
+        if (f.size > 20 * 1024 * 1024) { alert('「' + f.name + '」 파일이 너무 큽니다 (20MB 넘음).'); return; }
+        if (kind === 'image') {
+          busy(true, '그림을 여는 중…');
+          return ImgEdit.fromFile(f).then(function (d) {
+            busy(false);
+            return ImgEdit.open(d, '그림 편집 · 필요한 부분만 남기세요').then(function (e) { list.push({ id: uid(), name: f.name || '사진.jpg', kind: 'image', mime: 'image/jpeg', data: e || d, orig: d }); added++; });
+          }).catch(function () { busy(false); alert('「' + f.name + '」 그림을 읽지 못했습니다.'); });
+        }
+        return readDataURL(f).then(function (d) { list.push({ id: uid(), name: f.name, kind: kind, mime: f.type || '', data: d }); added++; });
+      });
+    });
+    chain.then(function () { if (added) { afterAttach(); toast(added + '개를 붙였습니다.'); } });
+  }
+
   /* ---------- 이벤트 ---------- */
   function openCompany(id, step) {
     return Store.get(id).then(function (c) {
       if (!c) return;
       cur = migrate(c); Settings.set('currentId', cur.id);
-      goStep(step != null ? step : Math.min(cur.lastStep || 0, STEPS.length - 1));
+      goStep(step != null ? step : Math.min(cur.docs[doc].lastStep || 0, STEPS.length - 1));
     });
   }
   function goHome() { closeModal(); if (cur) save(true); cur = null; view = 'home'; render(); window.scrollTo(0, 0); }
@@ -987,7 +1442,7 @@
     var act = b.dataset.act;
     switch (act) {
       case 'setMulti': multi = b.dataset.v === '1'; Settings.set('multi', multi); renderHome(); break;
-      case 'home': if (memoKey && memoSnap) { cur.edit = memoSnap; memoKey = null; memoSnap = null; document.getElementById('modal').classList.remove('memo-on'); } setSec = null; goHome(); break;
+      case 'home': if (memoKey && memoSnap) { restoreAll(memoSnap); memoKey = null; memoSnap = null; document.getElementById('modal').classList.remove('memo-on'); } setSec = null; goHome(); break;
       case 'menu': stepMenu(); break;
       case 'closeModal': closeModal(); break;
       case 'goto': closeModal(); goStep(+b.dataset.i); break;
@@ -999,14 +1454,14 @@
       case 'edOpen': openMemo(b.dataset.ed); break;
       case 'edAdd': {
         var lp = b.dataset.path, la = getP(cur, lp), lt = ROWT[norm(lp)];
-        memoSnap = clone(cur.edit); la = getP(cur, lp);
+        memoSnap = snapAll(); la = getP(cur, lp);
         var nv = lt ? clone(lt) : '';
         if (lp === 'edit.processes') nv.id = 'p' + Date.now().toString(36);
         la.push(nv); save(); rerender();
         openMemo(lp + '.' + (la.length - 1), true); break;
       }
       case 'edSave': cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; closeMemo('저장했습니다. 모든 업체 보고서에 들어갑니다.'); break;
-      case 'edCancel': if (memoSnap) cur.edit = memoSnap; closeMemo(); break;
+      case 'edCancel': if (memoSnap) restoreAll(memoSnap); closeMemo(); break;
       case 'edDel': {
         var dr = EDREG[memoKey]; if (!dr || !dr.del) break;
         var isProc = /^edit\.processes\.\d+$/.test(memoKey);
@@ -1103,7 +1558,7 @@
         cur.agencies[nk] = { name: pl.name, phone: pl.phone }; save(); rerender(); break;
       }
       case 'recrop': {
-        var sk = b.dataset.k, slot = PHOTO_SLOTS.filter(function (s) { return s.k === sk; })[0], o = cur.photosOrig[sk];
+        var sk = b.dataset.k, slot = ALL_SLOTS.filter(function (s) { return s.k === sk; })[0], o = cur.photosOrig[sk];
         if (!o) { toast('원본이 없어 다시 자를 수 없어요. 사진을 다시 골라 주세요.'); break; }
         Photo.recrop(o, slot.aspect).then(function (crop) { if (crop) { cur.photos[sk] = crop; save(true); rerender(); } });
         break;
@@ -1118,7 +1573,49 @@
       case 'hz': { var hct = cur.edit.hazardTables[+b.dataset.t || 0]; hct.checks = hct.checks || []; var hc = hct.checks, ix = hc.indexOf(b.dataset.k); if (ix >= 0) hc.splice(ix, 1); else hc.push(b.dataset.k); if (view === 'settings') { cur.reviewed = cur.reviewed || {}; cur.reviewed[setSec] = 'edited'; } save(); rerender(); break; }
       case 'resetSec': {
         var rs = b.dataset.sec;
-        if (confirm('「' + SEC_TITLE[rs] + '」을(를) 원본 내용으로 되돌릴까요?')) { SEC_PATHS[rs].forEach(function (p) { cur.edit[p] = clone(T.DEFAULT_EDIT[p]); }); T.upgradeEdit(cur.edit); if (cur.reviewed) delete cur.reviewed[rs]; save(); rerender(); toast('원본 내용으로 되돌렸습니다.'); }
+        if (confirm('「' + secTitle(rs) + '」을(를) 원본 내용으로 되돌릴까요?')) { resetSection(rs); if (cur.reviewed) delete cur.reviewed[rs]; save(); rerender(); toast('원본 내용으로 되돌렸습니다.'); }
+        break;
+      }
+      case 'docSel': setDoc(b.dataset.v); renderHome(); window.scrollTo(0, 0); break;
+      case 'unitAdd': {
+        var pdU = cur.docs.plan, ty = b.dataset.type, Ty = PLANDOC.typeOf(PS(), ty);
+        var used = pdU.units.map(function (u) { return u.driver; });
+        var free = cur.workers.findIndex(function (w, i) { return w.name && used.indexOf(String(i)) < 0 && used.indexOf(i) < 0; });
+        pdU.units.push({ id: uid(), type: ty, driver: free >= 0 ? String(free) : '', reg: [], lic: [], route: '' });
+        save(); rerender(); toast('「' + (Ty ? Ty.name : '') + '」 작업계획서를 추가했습니다.');
+        setTimeout(function () { var cs = document.querySelectorAll('.card.unit'); if (cs.length) cs[cs.length - 1].scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 40);
+        break;
+      }
+      case 'unitDel': if (confirm('이 장비의 작업계획서를 뺄까요? 붙인 서류도 함께 빠집니다.')) { cur.docs.plan.units.splice(+b.dataset.i, 1); save(true); rerender(); } break;
+      case 'attDel': if (confirm('이 첨부를 뺄까요?')) { getP(cur, b.dataset.path).splice(+b.dataset.i, 1); afterAttach(); } break;
+      case 'attEdit': {
+        var ap = b.dataset.path, ai = +b.dataset.i, af = getP(cur, ap)[ai];
+        ImgEdit.open(af.orig || af.data, '그림 편집 · ' + af.name).then(function (d) { if (d) { af.data = d; afterAttach(); } });
+        break;
+      }
+      case 'routeEdit': {
+        var rp = b.dataset.path, src = routeSrc(rp);
+        ImgEdit.open(src, '운행경로 그림 편집').then(function (d) { if (d) { setP(cur, rp, d); afterAttach(); } }).catch(function () { alert('그림을 열지 못했습니다.'); });
+        break;
+      }
+      case 'routeReset': if (confirm('기본 그림으로 되돌릴까요?')) { setP(cur, b.dataset.path, ''); afterAttach(); } break;
+      case 'eduAll': cur.docs.sedu.allDone = b.dataset.v; if (b.dataset.v === 'O') cur.docs.sedu.absent = 0; save(); rerender(); break;
+      case 'absCnt': { var ed = cur.docs.sedu, nW = cur.workers.filter(function (w) { return w.name; }).length; ed.absent = Math.max(0, Math.min(nW, (+ed.absent || 0) + (+b.dataset.d))); save(); rerender(); break; }
+      case 'insAdd': cur.docs.sedu.instructors.push({ name: '', title: '', place: '' }); save(); rerender(); break;
+      case 'insDel': if (confirm('이 교육 실시자를 지울까요?')) { cur.docs.sedu.instructors.splice(+b.dataset.i, 1); save(); rerender(); } break;
+      case 'typeAdd': {
+        var nid = 't' + Date.now().toString(36);
+        cur.plan.types.push({ id: nid, name: '새 장비', sub: '차량계 건설기계', equipNote: '건설기계 등록·검사증, 기계 대여사항 기록부, 점검 이력 등', routeDefault: '', route: '',
+          checks: [{ group: '운전자 자격', text: '운전자의 적정 자격*을 확인한다.', note: '', hi: false, action: '' }], steps: [{ work: '', risk: '', fix: '' }] });
+        cur.reviewed = cur.reviewed || {}; cur.reviewed['pt_' + nid] = 'edited';
+        save(true); setSec = 'pt_' + nid; render(); window.scrollTo(0, 0);
+        memoSnap = snapAll(); openMemo('plan.types.' + (cur.plan.types.length - 1) + '.title', true);
+        break;
+      }
+      case 'typeDel': {
+        var tdi = +b.dataset.t, tdt = cur.plan.types[tdi];
+        if (cur.plan.types.length <= 1 || !confirm('「' + tdt.name + '」 작업계획서를 지울까요? 업체가 이 장비로 만든 작업계획서도 PDF에서 빠집니다.')) break;
+        cur.plan.types.splice(tdi, 1); save(true); setSec = null; render(); window.scrollTo(0, 0); toast('지웠습니다.');
         break;
       }
       case 'pdf': save(true); makePdf(false); break;
@@ -1151,10 +1648,18 @@
     if (t.dataset && t.dataset.kind === 'tel') { var f = fmtPhone(t.value); if (f !== t.value) { t.value = f; setP(cur, t.dataset.bind, f); save(); } }
     if (t.dataset && t.dataset.bind && t.type === 'date') { setP(cur, t.dataset.bind, t.value); save(); }
     if (t.dataset && t.dataset.bind && t.tagName === 'SELECT') { setP(cur, t.dataset.bind, t.value); save(); }
+    if (t.dataset && t.dataset.attach) { addAttachments(t.dataset.attach, Array.prototype.slice.call(t.files || [])); t.value = ''; return; }
+    if (t.dataset && t.dataset.routefile) {
+      var rf = t.files && t.files[0], rpth = t.dataset.routefile; t.value = '';
+      if (!rf) return;
+      ImgEdit.fromFile(rf).then(function (d) { return ImgEdit.open(d, '운행경로 그림 · 필요한 부분만 남기세요').then(function (e) { return e || d; }); })
+        .then(function (d) { setP(cur, rpth, d); afterAttach(); toast('그림을 바꿨습니다.'); }).catch(function () { alert('그림을 읽지 못했습니다.'); });
+      return;
+    }
     if (t.dataset && t.dataset.photo) {
       var file = t.files && t.files[0], k = t.dataset.photo; t.value = '';
       if (!file) return;
-      var slot = PHOTO_SLOTS.filter(function (s) { return s.k === k; })[0];
+      var slot = ALL_SLOTS.filter(function (s) { return s.k === k; })[0];
       busy(true, '사진을 맞추는 중…');
       Photo.fromFile(file, slot.aspect).then(function (r) {
         busy(false);

@@ -773,7 +773,7 @@
     'plan.types.steps': { work: '', risk: '', fix: '' },
     'sedu.approvals': { label: '관리감독자' }, 'sedu.kinds': { label: '', on: false }, 'sedu.materials': { label: '', on: false },
     'sedu.instructors': { name: '', title: '', place: '' },
-    'sedu.blocks': { head: '[작업 이름 : 기간제 작업원 {N}명] (00:00～00:00, 1시간)', items: ['그 밖에 안전·보건관리에 필요한 사항'] },
+    'sedu.blocks': { head: '[작업 이름 : 제설장비 대체운전원 {N}명] (00:00～00:00, 1시간)', items: ['그 밖에 안전·보건관리에 필요한 사항'] },
     'edit.resultTables.rows': { task: '', cls: '1. 기계설비적요인', situation: '', measure: '', cases: '', p: 1, s: 2, redNo: '', redText: '', after: '', plan: '', done: '', owner: '' }
   };
   function norm(path) { return path.replace(/\.\d+\./g, '.'); }   // edit.resultTables.0.rows → edit.resultTables.rows

@@ -224,7 +224,7 @@
       var h = '<div class="doc-tabs" role="tablist" aria-label="만들 서류">' + Object.keys(DOCS).map(function (k) {
         return '<button role="tab" data-act="docSel" data-v="' + k + '" aria-selected="' + (k === doc) + '">' + DOCS[k].name + '</button>';
       }).join('') + '</div>';
-      h += '<section class="hero"><h1>' + hd[0] + '</h1><p>' + hd[1] + '</p><span class="hero-tag">' + hd[2] + '</span></section>';
+      h += '<section class="hero"><h1>' + hd[0] + '</h1><span class="hero-tag">' + hd[2] + '</span></section>';
       h += '<div class="seg" role="group" aria-label="작성 방식"><button data-act="setMulti" data-v="0" aria-pressed="' + !multi + '">한 업체 작성</button><button data-act="setMulti" data-v="1" aria-pressed="' + multi + '">여러 업체 작성</button></div>';
       if (!multi) {
         var last = list.filter(function (c) { return c.id === Settings.get('currentId'); })[0] || list[0];

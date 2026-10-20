@@ -527,3 +527,7 @@ body.wide .app, body.wide .top-inner { max-width: 1180px; }
 @media (max-width: 640px) { .att-list img, .att-ic { width: 52px; height: 52px; } .att-n { font-size: 14px; } }
 .ie .crop-zoom { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .ie .crop-zoom .btn { min-width: 0; padding: 0 6px; font-size: 16px; }
+.ck-unit { font-size: 17px; font-weight: 800; color: var(--accent); margin: 4px 0 8px; }
+.ck-unit small { color: var(--muted); font-weight: 600; }
+.ox-btn small { display: block; font-size: 14px; font-weight: 500; opacity: .8; margin-top: 2px; }
+.ck-act { display: block; color: var(--stop, #c0392b); font-size: 14px; margin-top: 2px; }

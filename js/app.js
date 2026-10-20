@@ -35,6 +35,7 @@
       { key: 'p_info', title: '기본 정보', short: '기본정보', icon: IC.info },
       { key: 'workers', title: '근로자', short: '근로자', icon: IC.workers },
       { key: 'p_units', title: '장비', short: '장비', icon: IC.equip },
+      { key: 'p_check', title: '장비 점검하기', short: '점검', icon: IC.survey },
       { key: 'p_survey', title: '사전조사', short: '사전조사', icon: IC.clip },
       { key: 'done', title: 'PDF 받기', short: 'PDF', icon: IC.done }
     ], hero: ['장비별<br>작업계획서 만들기', '장비와 운전원을 고르고 서류만 붙이면<br>작업계획서가 완성됩니다.', '굴착기 · 덤프 · 화물차 · 로더'] },
@@ -202,6 +203,7 @@
       case 'p_info': html = viewPlanInfo(); break;
       case 'p_units': html = viewPlanUnits(); break;
       case 'p_survey': html = viewPlanSurvey(); break;
+      case 'p_check': html = viewPlanCheck(); break;
       case 'e_info': html = viewEduInfo(); break;
       case 'e_survey': html = viewEduSurvey(); break;
       case 'e_photos': html = viewPhotos(SEDU_SLOTS); break;
@@ -535,6 +537,57 @@
       '<p class="note">한글(.hwp)·워드(.docx) 파일은 PDF 화면에 그대로 보이게 넣을 수 없어 PDF 안에 「첨부파일」로 들어갑니다(인쇄 안 됨). 가능하면 PDF나 사진으로 넣어 주세요.</p>';
   }
 
+  /* 장비 점검 설문: 추가한 장비의 점검 항목만, 한 문제씩 */
+  var ckAct = null;   // 부적정이라 답한 뒤 안전조치를 적는 중인 항목 {u, i}
+  function planUnits() { var P = PS(); return cur.docs.plan.units.map(function (u, ui) { return { u: u, ui: ui, T: PLANDOC.typeOf(P, u.type) }; }).filter(function (x) { return x.T; }); }
+  function ckPending() {
+    var us = planUnits();
+    for (var k = 0; k < us.length; k++) {
+      var x = us[k], ans = x.u.ans || {};
+      for (var i = 0; i < (x.T.checks || []).length; i++) if (!ans[i]) return { x: x, i: i, k: k };
+    }
+    return null;
+  }
+  function ckCount() {
+    var tot = 0, done = 0;
+    planUnits().forEach(function (x) { (x.T.checks || []).forEach(function (c, i) { tot++; if ((x.u.ans || {})[i]) done++; }); });
+    return { tot: tot, done: done };
+  }
+  function viewPlanCheck() {
+    var us = planUnits();
+    if (!us.length) return '<p class="lead">먼저 「장비」 단계에서 장비를 추가해 주세요.</p><button class="btn btn-ghost btn-big" data-act="goto" data-i="2">◀ 장비 추가하러 가기</button>';
+    var cnt = ckCount();
+    var bar = '<div class="sv-prog"><span>' + cnt.done + ' / ' + cnt.tot + '</span><div class="sv-bar"><i style="width:' + (cnt.tot ? cnt.done / cnt.tot * 100 : 0) + '%"></i></div></div>';
+    if (ckAct) {
+      var ux = cur.docs.plan.units[ckAct.u], T = ux && PLANDOC.typeOf(PS(), ux.type), it = T && T.checks[ckAct.i];
+      if (it) {
+        return bar + '<div class="sv-card"><div class="sv-topic">' + esc(T.name) + ' · ' + esc(it.group) + '</div><div class="sv-q">' + esc(it.text) + '</div>' +
+          '<div class="warn">❌ 부적정으로 답했어요. 어떻게 고칠지 적어 주세요. (모르면 비워 두세요)</div>' +
+          field('안전조치', 'docs.plan.units.' + ckAct.u + '.act.' + ckAct.i, { type: 'area', rows: 2, ph: '예) 후방카메라 교체 예정' }) +
+          '<button class="btn btn-primary btn-big" data-act="ckActDone">다 적었어요 ▶</button></div>';
+      }
+      ckAct = null;
+    }
+    var pd = ckPending();
+    if (pd) {
+      var c = pd.x.T.checks[pd.i], n = pd.x.T.checks.length;
+      var h = bar + '<div class="ck-unit">' + esc(pd.x.T.name) + ' 작업계획서 <small>(' + (pd.i + 1) + ' / ' + n + ')</small></div>' +
+        '<div class="sv-card"><div class="sv-topic">' + esc(c.group) + '</div><div class="sv-q">' + esc(c.text) + '</div>' + (c.note ? '<div class="sv-help">' + esc(c.note) + '</div>' : '') +
+        '<div class="ox"><button class="ox-btn o" data-act="ckAns" data-u="' + pd.x.ui + '" data-i="' + pd.i + '" data-v="O"><span>⭕</span>적정<small>잘 되어 있어요</small></button>' +
+        '<button class="ox-btn x" data-act="ckAns" data-u="' + pd.x.ui + '" data-i="' + pd.i + '" data-v="X"><span>❌</span>부적정<small>고쳐야 해요</small></button></div></div>';
+      if (cnt.done) h += '<button class="btn btn-ghost" data-act="ckBack">↩ 앞 질문 다시 답하기</button>';
+      return h;
+    }
+    var h2 = '<div class="sv-done"><div class="sv-done-t">장비 점검을 모두 마쳤습니다 👍</div><div class="hint">「다음」을 누르세요. 아래에서 답을 눌러 다시 고칠 수 있어요.</div></div>';
+    us.forEach(function (x) {
+      var ans = x.u.ans || {}, act = x.u.act || {}, bad = (x.T.checks || []).filter(function (c, i) { return ans[i] === 'X'; }).length;
+      h2 += '<h3 class="sec">' + esc(x.T.name) + ' <small>(부적정 ' + bad + '개)</small></h3><div class="ans-list">' + (x.T.checks || []).map(function (c, i) {
+        return '<button class="ans-row" data-act="ckRedo" data-u="' + x.ui + '" data-i="' + i + '"><span class="ans-t">' + (i + 1) + '. ' + esc(c.text) + (ans[i] === 'X' && act[i] ? '<small class="ck-act">안전조치: ' + esc(act[i]) + '</small>' : '') + '</span><span class="ans-a">' + (ans[i] === 'O' ? '⭕ 적정' : ans[i] === 'X' ? '❌ 부적정' : '') + '</span></button>';
+      }).join('') + '</div><button class="btn btn-ghost" data-act="ckReset" data-u="' + x.ui + '">↺ ' + esc(x.T.name) + ' 처음부터 다시 점검</button>';
+    });
+    return h2;
+  }
+
   /* ===== 특별교육 (업체가 하는 일) ===== */
   function viewEduInfo() {
     var ed = cur.docs.sedu;
@@ -590,7 +643,8 @@
       [!!i.company, '업체명', 0], [!!i.ceo, '대표자 성명', 0], [!!pd.workName, '작업명(장소)', 0], [!!pd.start && !!pd.end, '작업기간', 0],
       [nW > 0, '근로자 이름', 1], [units.length > 0, '장비 추가', 2],
       [units.length > 0 && units.every(hasDrv), '장비마다 운전원 고르기', 2],
-      [units.length > 0 && units.every(function (u) { return (u.reg || []).length; }), '장비 서류(등록증 등) 붙이기', 2]
+      [units.length > 0 && units.every(function (u) { return (u.reg || []).length; }), '장비 서류(등록증 등) 붙이기', 2],
+      (function () { var c = ckCount(); return [c.tot > 0 && c.done === c.tot, '장비 점검하기 (' + c.done + '/' + c.tot + ')', 3]; })()
     ]) + pdfButtons();
   }
   function viewDoneEdu() {
@@ -1618,6 +1672,22 @@
         cur.plan.types.splice(tdi, 1); save(true); setSec = null; render(); window.scrollTo(0, 0); toast('지웠습니다.');
         break;
       }
+      case 'ckAns': {
+        var cu = cur.docs.plan.units[+b.dataset.u], ci = +b.dataset.i;
+        cu.ans = cu.ans || {}; cu.act = cu.act || {}; cu.ans[ci] = b.dataset.v;
+        if (b.dataset.v === 'X') ckAct = { u: +b.dataset.u, i: ci }; else delete cu.act[ci];
+        save(); render(); window.scrollTo(0, 0); break;
+      }
+      case 'ckActDone': ckAct = null; save(); render(); window.scrollTo(0, 0); break;
+      case 'ckBack': {
+        // 마지막으로 답한 항목 (장비 순서·항목 순서로 가장 뒤) 지우기
+        var last = null;
+        planUnits().forEach(function (x) { (x.T.checks || []).forEach(function (c, i) { if ((x.u.ans || {})[i]) last = { u: x.u, i: i }; }); });
+        if (last) { delete last.u.ans[last.i]; if (last.u.act) delete last.u.act[last.i]; }
+        ckAct = null; save(); render(); break;
+      }
+      case 'ckRedo': { var ru = cur.docs.plan.units[+b.dataset.u]; if (ru.ans) delete ru.ans[+b.dataset.i]; ckAct = null; save(); render(); window.scrollTo(0, 0); break; }
+      case 'ckReset': if (confirm('이 장비의 점검 답을 모두 지우고 처음부터 할까요?')) { var su = cur.docs.plan.units[+b.dataset.u]; su.ans = {}; su.act = {}; ckAct = null; save(); render(); window.scrollTo(0, 0); } break;
       case 'pdf': save(true); makePdf(false); break;
       case 'pdfView': save(true); makePdf(true); break;
     }

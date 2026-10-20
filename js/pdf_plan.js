@@ -58,6 +58,7 @@
 
       /* 점검표 */
       var ck = T.checks || [], cb = [[lab('구분'), lab('점검 항목'), lab('적정'), lab('부적정'), lab('안전조치')]];
+      var ans = u.ans || {}, act = u.act || {};
       ck.forEach(function (it, i) {
         var span = 1;
         if (i === 0 || ck[i - 1].group !== it.group) { while (ck[i + span] && ck[i + span].group === it.group) span++; }
@@ -67,8 +68,8 @@
         cb.push([
           first ? { text: cl(it.group), rowSpan: span, bold: true, alignment: 'center', fontSize: 9, fillColor: '#F6F6F6' } : {},
           { text: txt, fontSize: 8.5, lineHeight: 1.3 },
-          { text: '□', alignment: 'center', fontSize: 11 }, { text: '□', alignment: 'center', fontSize: 11 },
-          { text: cl(it.action || ''), fontSize: 7.5, alignment: 'center', color: '#444' }
+          { text: ans[i] === 'O' ? '▣' : '□', alignment: 'center', fontSize: 11 }, { text: ans[i] === 'X' ? '▣' : '□', alignment: 'center', fontSize: 11 },
+          { text: cl((act[i] != null && act[i] !== '') ? act[i] : (it.action || '')), fontSize: 7.5, alignment: 'center', color: '#222' }
         ]);
       });
       content.push({ _big: true, table: { headerRows: 1, widths: [52, '*', 30, 34, 80], body: cb }, layout: { hLineWidth: function (i, n) { return i === 0 || i === 1 || i === n.table.body.length ? 1.2 : 0.6; }, vLineWidth: function (i, n) { return i === 0 || i === n.table.widths.length ? 1.2 : 0.6; } }, margin: [0, 0, 0, 10] });

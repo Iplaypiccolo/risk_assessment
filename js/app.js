@@ -109,6 +109,7 @@
     c.docs.ra = c.docs.ra || { lastStep: c.lastStep || 0 };
     c.docs.plan = c.docs.plan || {}; c.docs.plan.units = c.docs.plan.units || []; c.docs.plan.survey = c.docs.plan.survey || [];
     c.docs.sedu = c.docs.sedu || {};
+    if (c.docs.sedu.time === '09:00∼17:00 중 5H') c.docs.sedu.time = '09:00∼14:00 중 2H';
     if (c.answers.q2b2 === 'O') c.answers.q2b2 = 'B'; else if (c.answers.q2b2 === 'X') c.answers.q2b2 = 'N';
     delete c.answers.q10c;
     return c;
@@ -782,7 +783,7 @@
   }
   function typeIdx(tid) { var ts = (cur && cur.plan ? cur.plan : PS()).types; for (var i = 0; i < ts.length; i++) if (ts[i].id === tid) return i; return -1; }
   function secTitle(id) {
-    if (id === 'p_common') return '결재칸 · 유도자 · 별첨 문구';
+    if (id === 'p_common') return '결재칸 · 유도자 · 첨부 문구';
     if (/^pt_/.test(id)) { var ti = typeIdx(id.slice(3)); return ti >= 0 ? cur.plan.types[ti].name + ' 작업계획서' : '(지운 장비)'; }
     if (id === 'e_log') return '안전교육일지';
     return SEC_TITLE[id];
@@ -1145,8 +1146,8 @@
       '<tr><th>작업업체/작업자</th><th>업체명</th><td>' + au('업체명') + '</td><th>작업자</th><td>' + au('근로자 이름') + '</td></tr>' +
       '<tr><th>운전원</th><th>성명</th>' + cellTd('plan.driverNote', '운전원 이름 뒤에 붙는 말', ph('업체가 고름') + ' ' + nl(P.driverNote), '', function () { return field('운전원 이름 뒤에 붙는 말', 'plan.driverNote', {}); }) + '<th>연락처</th><td>' + au('자동') + '</td></tr>' +
       '<tr><th>유도자</th><th>성명</th>' + fld('plan.guide.name', '유도자 성명', 'plan.guide.name', { type: 'text' }) + '<th>연락처</th>' + fld('plan.guide.phone', '유도자 연락처', 'plan.guide.phone', { type: 'text' }) + '</tr>' +
-      '<tr><th>사전조사 내용</th>' + cellTd('plan.surveyNote', '사전조사 내용 문구', '[별첨] ' + nl(P.surveyNote) + ' ' + au('업체가 서류를 붙임'), ' colspan="4" style="text-align:left"', function () { return field('사전조사 내용 문구', 'plan.surveyNote', { type: 'area', rows: 3 }); }) + '</tr>' +
-      '<tr><th>기계·장비 제원</th><td colspan="4" style="text-align:left">[별첨] ' + au('장비마다 따로 (2장에서 고침)') + '</td></tr></table></div>' + addBtn('plan.approvals', '결재칸');
+      '<tr><th>사전조사 내용</th>' + cellTd('plan.surveyNote', '사전조사 내용 문구', nl(P.surveyNote) + ' ' + au('업체가 붙였을 때만 「(첨부 n)」 표시'), ' colspan="4" style="text-align:left"', function () { return field('사전조사 내용 문구', 'plan.surveyNote', { type: 'area', rows: 3 }); }) + '</tr>' +
+      '<tr><th>기계·장비 제원</th><td colspan="4" style="text-align:left">' + au('장비마다 따로 (2장에서 고침)') + '</td></tr></table></div>' + addBtn('plan.approvals', '결재칸');
     return h;
   }
   function planTypePage(tid) {
@@ -1159,8 +1160,8 @@
       '<tr><td colspan="3"' + edAttr(tKey) + '><b class="pt-t">' + esc(Ty.name) + ' 작업계획서</b><br><small>- ' + esc(Ty.sub) + ' -</small></td><th>' + esc((P.approvals[0] || {}).label || '') + '</th><td>' + au('결재칸은 1장 공통') + '</td></tr>' +
       '<tr><th>작업명(장소)</th><td colspan="2">' + ph() + '</td><th>작업기간</th><td>' + ph() + '</td></tr>' +
       '<tr><th>운전원 · 유도자</th><td colspan="4">' + au('업체 입력 · 1장 공통') + '</td></tr>' +
-      '<tr><th>사전조사 내용</th><td colspan="4" style="text-align:left">[별첨] ' + esc(P.surveyNote) + ' ' + au('1장 공통') + '</td></tr>' +
-      '<tr><th>기계·장비 제원</th>' + cellTd(base + '.equipNote', '기계·장비 제원 문구', '[별첨] ' + nl(Ty.equipNote) + ' ' + au('업체가 서류를 붙임'), ' colspan="4" style="text-align:left"', function () { return field('기계·장비 제원 문구', base + '.equipNote', { type: 'area', rows: 3 }); }) + '</tr></table></div>';
+      '<tr><th>사전조사 내용</th><td colspan="4" style="text-align:left">' + esc(P.surveyNote) + ' ' + au('1장 공통') + '</td></tr>' +
+      '<tr><th>기계·장비 제원</th>' + cellTd(base + '.equipNote', '기계·장비 제원 문구', nl(Ty.equipNote) + ' ' + au('업체가 붙였을 때만 「(첨부 n)」 표시'), ' colspan="4" style="text-align:left"', function () { return field('기계·장비 제원 문구', base + '.equipNote', { type: 'area', rows: 3 }); }) + '</tr></table></div>';
     var ck = Ty.checks || [];
     h += '<div class="rp-wrap"><table class="rt"><colgroup><col style="width:14%"><col><col style="width:7%"><col style="width:8%"><col style="width:17%"></colgroup><tr><th>구분</th><th>점검 항목</th><th>적정</th><th>부적정</th><th>안전조치</th></tr>' +
       rows(base + '.checks', '점검 항목', function (it, i) {
@@ -1346,7 +1347,7 @@
           extra.forEach(function (a) {
             chain = chain.then(function () {
               var bytes = dataURLBytes(a.data);
-              var asFile = function () { return main.attach(bytes, a.name, { mimeType: a.mime || 'application/octet-stream', description: '별첨 ' + a.no + '. ' + a.title }); };
+              var asFile = function () { return main.attach(bytes, a.name, { mimeType: a.mime || 'application/octet-stream', description: '첨부 ' + a.no + '. ' + a.title }); };
               if (a.kind !== 'pdf') return asFile();
               return PL.PDFDocument.load(bytes, { ignoreEncryption: true }).then(function (src) {
                 return main.copyPages(src, src.getPageIndices()).then(function (pages) { pages.forEach(function (pg) { main.addPage(pg); }); });

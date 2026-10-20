@@ -20,7 +20,12 @@
     var period = (yy(pd.start) || '’  .  .  .') + ' ~ ' + (yy(pd.end) || '’  .  .  .');
     var units = (pd.units || []).filter(function (u) { return typeOf(P, u.type); });
     var atts = opt.attachments || [];   // [{no, title, name, kind, data, unit}]
-    var refs = function (pred) { var n = atts.filter(pred).map(function (a) { return a.no; }); return n.length ? '  (별첨 ' + n.join(', ') + ')' : ''; };
+    /* 첨부한 경우에만 「(첨부 n)」 표시. 한글·워드는 PDF 화면에 안 보이므로 알려 줌 */
+    var refs = function (pred) {
+      var l = atts.filter(pred); if (!l.length) return '';
+      var hidden = l.some(function (a) { return a.kind !== 'image' && a.kind !== 'pdf'; });
+      return '  (첨부 ' + l.map(function (a) { return a.no; }).join(', ') + ')' + (hidden ? ' ※ 한글·워드 파일은 PDF 안의 첨부파일(따로 출력)' : '');
+    };
     var content = [], sigPages = {};
 
     if (!units.length) content.push({ text: '작업계획서를 만들 장비가 없습니다. 「장비」 단계에서 장비를 추가해 주세요.', fontSize: 12, margin: [0, 40, 0, 0] });
@@ -52,8 +57,8 @@
       body.push([lab('작업업체/작업자'), lab('업체명', { fillColor: null }), box(company), lab('작업자'), box(workerTxt)]);
       body.push([lab('운전원'), lab('성명', { fillColor: null }), { text: [cl(drv ? drv.name : ''), { text: ' ' + cl(P.driverNote || '') + refs(function (a) { return a.unit === ui && a.lic; }), fontSize: 7.5 }], fontSize: 9, alignment: 'left' }, lab('연락처'), box(drv ? drv.phone : '')]);
       body.push([lab('유도자'), lab('성명', { fillColor: null }), box((P.guide || {}).name || '', { alignment: 'left' }), lab('연락처'), box((P.guide || {}).phone || '')]);
-      body.push([lab('사전조사 내용'), { colSpan: 4, text: [{ text: '[별첨] ', bold: true }, cl(P.surveyNote || '') + refs(function (a) { return a.unit == null; })], fontSize: 9 }, {}, {}, {}]);
-      body.push([lab('기계·장비 제원'), { colSpan: 4, text: [{ text: '[별첨] ', bold: true }, cl(T.equipNote || '') + refs(function (a) { return a.unit === ui && !a.lic; })], fontSize: 9 }, {}, {}, {}]);
+      body.push([lab('사전조사 내용'), { colSpan: 4, text: cl(P.surveyNote || '') + refs(function (a) { return a.unit == null; }), fontSize: 9 }, {}, {}, {}]);
+      body.push([lab('기계·장비 제원'), { colSpan: 4, text: cl(T.equipNote || '') + refs(function (a) { return a.unit === ui && !a.lic; }), fontSize: 9 }, {}, {}, {}]);
       content.push({ id: 'sig_plan_' + ui, table: { widths: [74, 46, '*', 52, 128], body: body }, layout: { hLineWidth: function (i, n) { return i === 0 || i === n.table.body.length ? 1.2 : 0.6; }, vLineWidth: function (i, n) { return i === 0 || i === n.table.widths.length ? 1.2 : 0.6; } }, margin: [0, 0, 0, 6] });
 
       /* 점검표 */
@@ -88,18 +93,12 @@
       content.push({ unbreakable: true, stack: [{ text: '□ 운행경로 및 작업방법', fontSize: 12, margin: [0, 4, 0, 4] }, { table: { headerRows: 0, widths: [22, 90, '*', '*'], body: rb }, layout: { hLineWidth: function (i, n) { return i === 0 || i === n.table.body.length ? 1.2 : 0.6; }, vLineWidth: function (i, n) { return i === 0 || i === n.table.widths.length ? 1.2 : 0.6; } } }] });
     });
 
-    /* 별첨 */
+    /* 첨부한 그림은 한 쪽씩 (PDF 첨부는 뒤에 이어 붙임) */
     if (atts.length) {
-      content.push({ text: '', pageBreak: 'before' });
-      content.push({ text: '별 첨 목 록', fontSize: 16, bold: true, alignment: 'center', margin: [0, 0, 0, 14] });
-      content.push({ table: { headerRows: 1, widths: [40, '*', 150, 90], body: [[lab('번호'), lab('내용'), lab('파일'), lab('비고')]].concat(atts.map(function (a) {
-        return [box(String(a.no)), box(a.title, { alignment: 'left' }), box(a.name, { fontSize: 8 }),
-          box(a.kind === 'image' ? '아래에 첨부' : a.kind === 'pdf' ? '뒤쪽에 첨부' : 'PDF 안의 첨부파일\n(따로 출력)', { fontSize: 8 })];
-      })) }, layout: thin });
       atts.forEach(function (a) {
         if (a.kind !== 'image') return;
         content.push({ text: '', pageBreak: 'before' });
-        content.push({ text: '별첨 ' + a.no + '. ' + cl(a.title), fontSize: 11, bold: true, margin: [0, 0, 0, 2] });
+        content.push({ text: '첨부 ' + a.no + '. ' + cl(a.title), fontSize: 11, bold: true, margin: [0, 0, 0, 2] });
         content.push({ text: cl(a.name), fontSize: 8, color: '#666', margin: [0, 0, 0, 8] });
         content.push({ image: a.data, fit: [476, 690], alignment: 'center' });
       });

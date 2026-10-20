@@ -127,10 +127,10 @@
     title: '안 전 교 육 일지',
     subtitle: '(제설장비 대체운전원)',
     approvals: [{ label: '담 당 자' }],
-    timeText: '09:00∼17:00 중 5H',
+    timeText: '09:00∼14:00 중 2H',
     kinds: [
       { label: '신규채용자 교육(8H)', on: false }, { label: '작업내용 변경시 교육(2H)', on: false },
-      { label: '특별교육(5H) (간헐적 작업)', on: true }, { label: '관리감독자 교육(16H)', on: false },
+      { label: '특별교육(2H) (간헐적 작업)', on: true }, { label: '관리감독자 교육(16H)', on: false },
       { label: '근로자 정기교육(매분기 6H)', on: false }, { label: '물질안전보건자료 교육', on: true }
     ],
     eduTitle: '제설장비 대체운전원 특별교육',
@@ -169,7 +169,11 @@
         s.blocks.forEach(function (b) { b.head = String(b.head || '').replace(/기간제 작업원/g, '제설장비 대체운전원'); });
       }
     }
-    s._v = 2;
+    if (s.title !== undefined && (s._v || 0) < 3) {
+      if (s.timeText === '09:00∼17:00 중 5H') s.timeText = SEDU.timeText;
+      (s.kinds || []).forEach(function (k) { if (k.label === '특별교육(5H) (간헐적 작업)') k.label = '특별교육(2H) (간헐적 작업)'; });
+    }
+    s._v = 3;
     Object.keys(SEDU).forEach(function (k) { if (s[k] === undefined) s[k] = clone(SEDU[k]); });
     return s;
   }

@@ -236,7 +236,6 @@
         } else {
           h += '<button class="btn btn-primary btn-big" data-act="new">작성 시작하기 ▶</button>';
         }
-        h += '<p class="note">입력한 내용은 <b>이 휴대폰 안에만</b> 저장되고 어디로도 보내지지 않습니다.</p>';
       } else {
         h += '<div class="list-head"><h2>업체 목록 <small>(' + list.length + '곳)</small></h2><button class="btn btn-primary" data-act="new">＋ 새 업체</button></div>';
         if (!list.length) h += '<p class="note">아직 업체가 없습니다. 「＋ 새 업체」를 누르세요.</p>';
@@ -256,7 +255,6 @@
       }
       h += '<div class="home-tools">' +
         '<button class="btn btn-ghost btn-big" data-act="settings">⚙ ' + DOCS[doc].name + ' 기본 내용 바꾸기</button>' +
-        '<p class="note">' + ({ ra: '위험요인, 점검 항목, 보호구 등', plan: '결재칸, 장비별 점검표, 운행경로 그림 등', sedu: '결재칸, 교육구분, 교육내용 등' })[doc] + ' 서류에 미리 들어 있는 내용을 고칩니다. 모든 업체에 똑같이 적용됩니다. 고칠 것이 없으면 누르지 않아도 됩니다.</p>' +
         '<details class="more"><summary>기본 내용 설정 저장 · 불러오기</summary><p class="note">세 서류(위험성평가·작업계획서·특별교육)의 「기본 내용 바꾸기」에서 고친 설정만 파일(.json)로 저장하고 불러옵니다. 업체가 작성한 내용은 들어가지 않습니다. 이 파일을 다른 분께 보내 「불러오기」 하면 같은 설정으로 보고서를 만들 수 있습니다.</p><div class="row2"><button class="btn btn-ghost" data-act="export">설정 저장</button><button class="btn btn-ghost" data-act="import">설정 불러오기</button></div></details></div>';
       $app.innerHTML = h;
     });

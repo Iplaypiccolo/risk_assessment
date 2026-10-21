@@ -98,7 +98,8 @@
         note = '재해발생수준 제외, 100점 환산 ' + conv + '점';
       } else { total = sub + q10; grade = gradeOf(total); }
     }
-    return { scores: res, subtotal: sub, total: total, grade: grade, note: note, done: done, base: base };
+    var subAll = sub + (typeof q10 === 'number' ? q10 : 0);   // 소계: A·B·C 모두 더함 (합계와 같음)
+    return { scores: res, subtotal: subAll, total: total, grade: grade, note: note, done: done, base: base };
   }
   function gradeOf(s) { return s >= 90 ? 'S등급' : s >= 80 ? 'A등급' : s >= 70 ? 'B등급' : s >= 60 ? 'C등급' : 'D등급'; }
 

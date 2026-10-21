@@ -531,3 +531,11 @@ body.wide .app, body.wide .top-inner { max-width: 1180px; }
 .ck-unit small { color: var(--muted); font-weight: 600; }
 .ox-btn small { display: block; font-size: 14px; font-weight: 500; opacity: .8; margin-top: 2px; }
 .ck-act { display: block; color: var(--stop, #c0392b); font-size: 14px; margin-top: 2px; }
+/* 체크박스 모양 칩: 고르면 ✔ */
+.chip.cbx { display: inline-flex; align-items: center; gap: 10px; padding-left: 12px; }
+.chip.cbx::before { content: ''; flex: none; width: 22px; height: 22px; border: 2px solid #8a9aab; border-radius: 6px; background: #fff; box-sizing: border-box; display: grid; place-items: center; font-size: 16px; line-height: 1; font-weight: 900; color: var(--ink); }
+.chip.cbx.on::before { content: '✔'; background: #fff; border-color: #fff; }
+.btn-preview { width: 100%; margin: 10px 0 6px; border-color: var(--accent); color: var(--accent); font-weight: 800; }
+.set-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0 4px; }
+.set-top .set-back { margin: 0; }
+.set-top .btn-preview { width: auto; margin: 0 0 0 auto; }

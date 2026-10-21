@@ -31,7 +31,9 @@
     var outW = aspect >= 1.5 ? 1600 : 1200, outH = Math.round(outW / aspect);
     var cv = document.createElement('canvas'); cv.width = outW; cv.height = outH;
     var cx = cv.getContext('2d'); cx.fillStyle = '#fff'; cx.fillRect(0, 0, outW, outH);
-    cx.drawImage(im, rect.x, rect.y, rect.w, rect.h, 0, 0, outW, outH);
+    /* 사진이 틀보다 작으면 남는 곳은 흰 바탕 (보고서에서 흰색) */
+    var k = outW / rect.w;
+    cx.drawImage(im, -rect.x * k, -rect.y * k, im.naturalWidth * k, im.naturalHeight * k);
     return cv.toDataURL('image/jpeg', 0.85);
   }
   function centerRect(w, h, aspect) {
@@ -52,7 +54,7 @@
         '</div>';
       modal.hidden = false; document.body.classList.add('noscroll');
       var stage = document.getElementById('cropStage'), cv = document.getElementById('cropCv'), cx = cv.getContext('2d');
-      var W, H, fx, fy, fw, fh, scale, minScale, ox, oy, dpr = Math.min(2, g.devicePixelRatio || 1);
+      var W, H, fx, fy, fw, fh, scale, minScale, coverScale, ox, oy, dpr = Math.min(2, g.devicePixelRatio || 1);
       function layout() {
         W = stage.clientWidth; H = stage.clientHeight;
         cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
@@ -60,20 +62,22 @@
         fw = W - pad * 2; fh = fw / aspect;
         if (fh > H - pad * 2) { fh = H - pad * 2; fw = fh * aspect; }
         fx = (W - fw) / 2; fy = (H - fh) / 2;
-        minScale = Math.max(fw / im.naturalWidth, fh / im.naturalHeight);
-        if (!scale) { scale = minScale; ox = fx + (fw - im.naturalWidth * scale) / 2; oy = fy + (fh - im.naturalHeight * scale) / 2; }
+        coverScale = Math.max(fw / im.naturalWidth, fh / im.naturalHeight);   // 틀을 꽉 채우는 크기
+        minScale = Math.min(fw / im.naturalWidth, fh / im.naturalHeight) * 0.5;   // 사진 전체가 틀 안에 들어간 뒤 반까지 더 줄일 수 있음
+        if (!scale) { scale = coverScale; ox = fx + (fw - im.naturalWidth * scale) / 2; oy = fy + (fh - im.naturalHeight * scale) / 2; }
         clamp(); draw();
       }
       function clamp() {
         if (scale < minScale) scale = minScale;
-        if (scale > minScale * 5) scale = minScale * 5;
+        if (scale > coverScale * 5) scale = coverScale * 5;
         var iw = im.naturalWidth * scale, ih = im.naturalHeight * scale;
-        if (ox > fx) ox = fx; if (oy > fy) oy = fy;
-        if (ox + iw < fx + fw) ox = fx + fw - iw; if (oy + ih < fy + fh) oy = fy + fh - ih;
+        /* 틀보다 크면 틀을 덮도록, 작으면 틀 안에 머물도록 */
+        if (iw >= fw) { if (ox > fx) ox = fx; if (ox + iw < fx + fw) ox = fx + fw - iw; } else { if (ox < fx) ox = fx; if (ox + iw > fx + fw) ox = fx + fw - iw; }
+        if (ih >= fh) { if (oy > fy) oy = fy; if (oy + ih < fy + fh) oy = fy + fh - ih; } else { if (oy < fy) oy = fy; if (oy + ih > fy + fh) oy = fy + fh - ih; }
       }
       function draw() {
         cx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        cx.fillStyle = '#222'; cx.fillRect(0, 0, W, H);
+        cx.fillStyle = '#000'; cx.fillRect(0, 0, W, H);
         cx.drawImage(im, ox, oy, im.naturalWidth * scale, im.naturalHeight * scale);
         cx.fillStyle = 'rgba(0,0,0,0.6)';
         cx.fillRect(0, 0, W, fy); cx.fillRect(0, fy + fh, W, H - fy - fh); cx.fillRect(0, fy, fx, fh); cx.fillRect(fx + fw, fy, W - fx - fw, fh);
@@ -83,7 +87,7 @@
       }
       function zoom(f, cxp, cyp) {
         cxp = cxp == null ? fx + fw / 2 : cxp; cyp = cyp == null ? fy + fh / 2 : cyp;
-        var ns = Math.max(minScale, Math.min(minScale * 5, scale * f)); var k = ns / scale;
+        var ns = Math.max(minScale, Math.min(coverScale * 5, scale * f)); var k = ns / scale;
         ox = cxp - (cxp - ox) * k; oy = cyp - (cyp - oy) * k; scale = ns; clamp(); draw();
       }
       var pts = {}, last = null;

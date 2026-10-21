@@ -155,8 +155,8 @@
       var custom = o.add && (customOpen[path] || (v !== '' && !known));
       chips = '<div class="chips">' + o.chips.map(function (c) {
         var val = Array.isArray(c) ? c[0] : c, lab = Array.isArray(c) ? c[1] : c;
-        return '<button type="button" class="chip' + (v === val ? ' on' : '') + '" data-act="chip" data-path="' + path + '" data-val="' + esc(val) + '">' + esc(lab) + '</button>';
-      }).join('') + (o.add ? '<button type="button" class="chip add' + (custom ? ' on' : '') + '" data-act="chipAdd" data-path="' + path + '">＋ 추가하기</button>' : '') + '</div>';
+        return '<button type="button" class="chip' + (o.cbx ? ' cbx' : '') + (v === val ? ' on' : '') + '" data-act="chip" data-path="' + path + '" data-val="' + esc(val) + '">' + esc(lab) + '</button>';
+      }).join('') + (o.add ? '<button type="button" class="chip add' + (o.cbx ? ' cbx' : '') + (custom ? ' on' : '') + '" data-act="chipAdd" data-path="' + path + '">' + (o.cbx ? '추가하기' : '＋ 추가하기') + '</button>' : '') + '</div>';
       if (o.add && !custom) hideInput = true;
     }
     return '<label class="field' + (o.cls ? ' ' + o.cls : '') + '"><span class="lab">' + label + (o.req ? ' <em class="req">필수</em>' : '') + '</span>' +
@@ -164,7 +164,36 @@
   }
 
   /* ---------- 화면 그리기 ---------- */
+  var navLock = false, navKey = '', listScroll = 0, memoScroll = 0;
+  function navState() { return { v: view, s: view === 'step' ? stepIdx : null, sec: view === 'settings' ? setSec : null, id: view === 'step' && cur ? cur.id : null }; }
+  function navSync() {
+    if (navLock) return;
+    var st = navState(), k = JSON.stringify(st);
+    if (k === navKey) return;
+    try { if (!navKey) history.replaceState(st, ''); else history.pushState(st, ''); } catch (e) { /* 무시 */ }
+    navKey = k;
+  }
+  window.addEventListener('popstate', function (e) {
+    var st = e.state || { v: 'home' };
+    var m = document.getElementById('modal');
+    if (memoKey) { if (memoSnap) restoreAll(memoSnap); memoKey = null; memoSnap = null; m.classList.remove('memo-on'); }
+    if (!m.hidden) closeModal();
+    navLock = true;
+    var done = function () { navLock = false; navKey = JSON.stringify(navState()); };
+    if (st.v === 'settings' && SET) {
+      if (view === 'step' && cur) save(true);
+      cur = SET; view = 'settings'; setSec = st.sec || null; render(); window.scrollTo(0, setSec ? 0 : listScroll); done();
+    } else if (st.v === 'step' && st.id) {
+      var go = function () { goStep(st.s || 0); done(); };
+      if (cur && cur.id === st.id && view === 'step') go();
+      else Store.get(st.id).then(function (c) { if (!c) { cur = null; view = 'home'; render(); done(); return; } cur = migrate(c); go(); }).catch(function () { done(); });
+    } else {
+      if (view === 'step' && cur) save(true);
+      cur = null; view = 'home'; setSec = null; render(); window.scrollTo(0, 0); done();
+    }
+  });
   function render() {
+    navSync();
     var nav = document.getElementById('bottomNav'), prog = document.getElementById('progress'), menu = document.getElementById('topMenu');
     var sub = document.getElementById('topSub');
     if (sub) sub.textContent = view === 'step' && cur ? (cur.info.company || '업체명 미입력') + (DOC_ON.length > 1 ? ' · ' + DOCS[doc].name : '') : view === 'settings' ? '모든 업체에 똑같이 적용' : (DOC_ON.length > 1 ? '위험성평가 · 작업계획서 · 특별교육' : '제설작업 위험성평가 결과보고서');
@@ -291,12 +320,12 @@
       h += '<div class="card"><div class="card-head"><b>근로자 ' + (i + 1) + '</b>' + (cur.workers.length > 1 ? '<button class="btn btn-danger btn-sm" data-act="delWorker" data-i="' + i + '">삭제</button>' : '') + '</div>' +
         field('이름', 'workers.' + i + '.name', { ph: '예) 김영수' }) +
         field('휴대폰', 'workers.' + i + '.phone', { type: 'tel', ph: '010-0000-0000' }) +
-        field('하는 일', 'workers.' + i + '.role', { chips: ['운전원'], add: 1, ph: '하는 일을 적어 주세요 (예: 신호수)' }) + '</div>';
+        field('하는 일', 'workers.' + i + '.role', { chips: ['운전원'], add: 1, cbx: 1, ph: '하는 일을 적어 주세요 (예: 신호수)' }) + '</div>';
     });
     h += '<button class="btn btn-ghost btn-big" data-act="addWorker">＋ 근로자 추가</button>';
     if (doc !== 'ra') return h;
-    h += '<div class="card"><div class="card-head"><b>근로자 중에 해당하는 분이 있나요?</b></div><p class="hint">해당하면 눌러서 ■ 표시하세요.</p><div class="chips big">' +
-      T.FIXED.traits.map(function (t) { var on = !!cur.traits[t[0]]; return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-act="trait" data-k="' + t[0] + '">' + (on ? '■ ' : '□ ') + t[1] + (t[0] === 'senior' ? ' (55세 이상)' : '') + '</button>'; }).join('') + '</div></div>';
+    h += '<div class="card"><div class="card-head"><b>근로자 중에 해당하는 분이 있나요?</b></div><p class="hint">해당하면 눌러서 ✔ 표시하세요.</p><div class="chips big">' +
+      T.FIXED.traits.map(function (t) { var on = !!cur.traits[t[0]]; return '<button type="button" class="chip cbx' + (on ? ' on' : '') + '" data-act="trait" data-k="' + t[0] + '" aria-pressed="' + on + '">' + t[1] + (t[0] === 'senior' ? ' (55세 이상)' : '') + '</button>'; }).join('') + '</div></div>';
     return h;
   }
 
@@ -960,7 +989,7 @@
         var hvKey = reg('info.' + t + '.heavy', '중량물 인력 취급', function () {
           var h2 = cur.edit.infoTables[t].heavy || (cur.edit.infoTables[t].heavy = {});
           return field('단위 중량', base + '.heavy.unit', { type: 'text' }) + '<div class="field"><span class="lab">취급형태</span><div class="chips">' +
-            [['lift', '들기'], ['push', '밀기'], ['pull', '끌기'], ['none', '해당무']].map(function (o) { return '<button class="chip' + (h2[o[0]] ? ' on' : '') + '" data-act="toggle" data-path="' + base + '.heavy.' + o[0] + '">' + (h2[o[0]] ? '■ ' : '□ ') + o[1] + '</button>'; }).join('') + '</div></div>';
+            [['lift', '들기'], ['push', '밀기'], ['pull', '끌기'], ['none', '해당무']].map(function (o) { return '<button class="chip cbx' + (h2[o[0]] ? ' on' : '') + '" data-act="toggle" data-path="' + base + '.heavy.' + o[0] + '">' + o[1] + '</button>'; }).join('') + '</div></div>';
         });
         var envKey = reg('info.' + t + '.env', '작업환경측정', function () { return field('작업환경측정', base + '.envMeasure', { chips: [['yes', '측정'], ['no', '미측정'], ['none', '해당무']], noInput: 1 }); });
         var eq = IT.equipment || [], ch = IT.chemicals || [];
@@ -1222,7 +1251,7 @@
   function viewSettings() {
     var rv = cur.reviewed || {};
     if (!setSec) {
-      var h = '<p class="lead">' + DOCS[doc].name + ' 서류 순서대로 정리했습니다. 항목을 누르면 <b>서류의 표 모양 그대로</b> 나옵니다. 바꾼 내용은 <b>모든 업체의 서류에 똑같이</b> 들어갑니다.</p>';
+      var h = PREVIEW_BTN + '<p class="lead">' + DOCS[doc].name + ' 서류 순서대로 정리했습니다. 항목을 누르면 <b>서류의 표 모양 그대로</b> 나옵니다. 바꾼 내용은 <b>모든 업체의 서류에 똑같이</b> 들어갑니다.</p>';
       docChapters().forEach(function (ch) {
         h += '<section class="toc"><h3 class="toc-h"><span class="toc-no">' + ch.no + '</span>' + esc(ch.title) + '</h3>';
         if (ch.fixed) { h += '<p class="toc-fixed">🔒 ' + esc(ch.fixed) + '</p></section>'; return; }
@@ -1242,7 +1271,7 @@
       return h + '<button class="btn btn-primary btn-big" data-act="home">처음 화면으로</button>';
     }
     EDREG = {};
-    return '<button class="btn btn-sm btn-ghost set-back" data-act="setBack">◀ 목차로</button>' +
+    return '<div class="set-top"><button class="btn btn-sm btn-ghost set-back" data-act="setBack">◀ 목차로</button>' + PREVIEW_BTN.replace('btn-preview', 'btn-preview btn-sm') + '</div>' +
       '<div class="rp' + (showEd ? ' show-ed' : '') + '">' + pageFor(setSec) + '</div>' +
       (canReset(setSec) ? '<button class="btn btn-ghost btn-reset" data-act="resetSec" data-sec="' + setSec + '">↺ 이 항목을 원본 내용으로 되돌리기</button>' : '');
   }
@@ -1279,6 +1308,7 @@
   function snapAll() { return clone({ edit: cur.edit, plan: cur.plan, sedu: cur.sedu }); }
   function restoreAll(sn) { cur.edit = sn.edit; cur.plan = sn.plan; cur.sedu = sn.sedu; }
   function openMemo(key, snapTaken) {
+    if (!memoKey) memoScroll = window.scrollY;
     if (!snapTaken) memoSnap = snapAll();
     memoKey = key; drawMemo();
     if (window.matchMedia && window.matchMedia('(hover: hover)').matches) {
@@ -1288,7 +1318,7 @@
   function closeMemo(msg) {
     memoKey = null; memoSnap = null;
     var m = document.getElementById('modal'); m.classList.remove('memo-on'); closeModal();
-    save(true); rerender(); if (msg) toast(msg);
+    save(true); render(); window.scrollTo(0, memoScroll); if (msg) toast(msg);
   }
 
   /* ---------- PDF ---------- */
@@ -1377,6 +1407,31 @@
       busy(false); if (win) win.close();
       console.error(e); alert('PDF를 만들지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.\n(' + (e && e.message ? e.message : e) + ')');
     });
+  }
+  /* 기본 내용 바꾸기: 고친 내용이 보고서에 어떻게 나오는지 예시 업체로 PDF 미리보기 */
+  var PREVIEW_BTN = '<button class="btn btn-ghost btn-preview" data-act="setPreview">👀 보고서 미리보기 (PDF)</button>';
+  function sampleCompany() {
+    var c = newCompany(), t = D.today();
+    c.info = { writeDate: t, contract: '(예시) ' + t.slice(0, 4) + '년 ○○지사 제설작업', company: '(예시) ○○건설기계', ceo: '홍길동', ceoPhone: '010-0000-0000',
+      branch: '○○', bizType: '건설기계 대여업', address: '(예시) ○○시 ○○로 00', contractStart: t, contractEnd: t };
+    c.workers = [{ name: '김철수', phone: '010-0000-0001', role: '운전원' }, { name: '이영희', phone: '010-0000-0002', role: '운전원' }];
+    c.emergency = [{ name: '김○○', phone: '010-0000-0003', rel: '妻' }];
+    return c;
+  }
+  function previewSettings() {
+    if (memoKey) { toast('고치는 창을 먼저 닫아 주세요.'); return; }
+    var win = null;
+    try { win = window.open('', '_blank'); if (win) win.document.write('<p style="font:20px sans-serif;padding:20px">미리보기를 만드는 중입니다…</p>'); } catch (e) { win = null; }
+    busy(true, '미리보기 PDF를 만드는 중…<br><small>예시 업체로 만듭니다</small>');
+    prepPdf().then(function (flow) {
+      var dd = PDFDOC.build(sampleCompany(), { flow: flow, edit: SET.edit });
+      return new Promise(function (res, rej) { try { window.pdfMake.createPdf(dd).getBlob(res); } catch (e) { rej(e); } });
+    }).then(function (blob) {
+      busy(false);
+      var url = URL.createObjectURL(blob);
+      if (win) { win.location.href = url; return; }
+      var a = document.createElement('a'); a.href = url; a.download = '미리보기_위험성평가.pdf'; document.body.appendChild(a); a.click(); a.remove();
+    }).catch(function (e) { busy(false); if (win) win.close(); alert('미리보기를 만들지 못했습니다.\n(' + (e && e.message ? e.message : e) + ')'); });
   }
   function busy(on, msg) {
     var m = document.getElementById('modal');
@@ -1499,10 +1554,11 @@
       case 'menu': stepMenu(); break;
       case 'closeModal': closeModal(); break;
       case 'goto': closeModal(); goStep(+b.dataset.i); break;
-      case 'settings': cur = SET; view = 'settings'; setSec = null; showEd = true; render(); window.scrollTo(0, 0); break;
-      case 'setOpen': setSec = b.dataset.sec; render(); window.scrollTo(0, 0); break;
-      case 'setBack': setSec = null; render(); window.scrollTo(0, 0); break;
-      case 'setOk': cur.reviewed = cur.reviewed || {}; if (cur.reviewed[setSec] !== 'edited') cur.reviewed[setSec] = 'ok'; save(true); setSec = null; render(); window.scrollTo(0, 0); toast('확인했습니다.'); break;
+      case 'settings': cur = SET; view = 'settings'; setSec = null; showEd = true; listScroll = 0; render(); window.scrollTo(0, 0); break;
+      case 'setPreview': previewSettings(); break;
+      case 'setOpen': listScroll = window.scrollY; setSec = b.dataset.sec; render(); window.scrollTo(0, 0); break;
+      case 'setBack': setSec = null; render(); window.scrollTo(0, listScroll); break;
+      case 'setOk': cur.reviewed = cur.reviewed || {}; if (cur.reviewed[setSec] !== 'edited') cur.reviewed[setSec] = 'ok'; save(true); setSec = null; render(); window.scrollTo(0, listScroll); toast('확인했습니다.'); break;
       case 'edShow': showEd = !showEd; rerender(); if (showEd) toast('테두리 친 칸을 누르면 고칠 수 있어요.'); break;
       case 'edOpen': openMemo(b.dataset.ed); break;
       case 'edAdd': {

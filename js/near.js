@@ -5,7 +5,9 @@
   var sdkP = null;
   var KINDS = {
     fire: { label: '119 안전센터', color: '#c42b2b', words: ['119안전센터', '소방서'], ok: function (p) { return /119|소방/.test(p.place_name); } },
-    hospital: { label: '병원', color: '#0e7a55', words: ['응급실', '종합병원', '병원'], ok: function (p) { return /병원|의료원|응급/.test(p.place_name + p.category_name) && !/동물|한의원|치과/.test(p.place_name + p.category_name); } },
+    /* 병원은 카카오 「병원」 분류(HP8)에서만 찾음 → 「응급실 ○○떡볶이」 같은 음식점이 안 나옴 */
+    hospital: { label: '병원', color: '#0e7a55', words: ['응급실', '종합병원', '병원'], cat: 'HP8',
+      ok: function (p) { return p.category_group_code === 'HP8' && /병원|의료원/.test(p.place_name) && !/동물|한의원|치과|요양|한방|정신/.test(p.place_name + p.category_name); } },
     police: { label: '경찰서', color: '#1f5f8f', words: ['경찰서'], ok: function (p) { return /경찰서$/.test(p.place_name.trim()); } },
     patrol: { label: '고속도로 순찰대', color: '#b26a00', words: ['고속도로순찰대', '고속도로 순찰대'], ok: function (p) { return /순찰대/.test(p.place_name); } }
   };
@@ -23,6 +25,9 @@
     });
     return sdkP;
   }
+  /* 음식점·카페·편의점·주차장 등은 어느 기관을 찾든 빼기 */
+  var NOT_AGENCY = /^(FD6|CE7|CS2|PK6|OL7|AD5|AT4|CT1|AC5|MT1|BK9|SW8|PS3|SC4|AG2|PM9)$/;
+  function notShop(p) { return !NOT_AGENCY.test(p.category_group_code || '') && !/^(음식점|카페|가정,생활|쇼핑)/.test(p.category_name || ''); }
   function kw(k, ps, word, opt) {
     return new Promise(function (res) {
       ps.keywordSearch(word, function (data, status) { res(status === k.maps.services.Status.OK ? data : []); }, opt || {});
@@ -69,8 +74,8 @@
       var opt = { location: new k.maps.LatLng(loc.lat, loc.lng), radius: 20000, sort: k.maps.services.SortBy.DISTANCE };
       function nextWord() {
         if (!words.length || found.length >= n) return Promise.resolve();
-        return kw(k, ps, words.shift(), opt).then(function (d) {
-          d.filter(K.ok).forEach(function (p) {
+        return kw(k, ps, words.shift(), K.cat ? Object.assign({ category_group_code: K.cat }, opt) : opt).then(function (d) {
+          d.filter(notShop).filter(K.ok).forEach(function (p) {
             if (found.length < n && !found.some(function (f) { return f.name === p.place_name; }))
               found.push({ name: p.place_name, phone: p.phone || '', dist: fmtDist(p.distance), meters: +p.distance || 0, lat: +p.y, lng: +p.x });
           });

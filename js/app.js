@@ -8,7 +8,7 @@
   var view = 'home';       // home | step | settings
   var stepIdx = 0;
   var openSec = {};
-  var multi = Settings.get('multi', Settings.get('admin', false));
+  var multi = false;       // 「여러 업체 작성」은 뺌 — 한 업체만 작성
   var nearCache = {};      // 구호기관 검색 결과 (업체 id별, 저장 안 함)
   var nearMode = 'gps';
   var customOpen = {};     // '추가하기'로 직접 입력칸을 연 항목
@@ -227,11 +227,10 @@
         return '<button role="tab" data-act="docSel" data-v="' + k + '" aria-selected="' + (k === doc) + '">' + DOCS[k].name + '</button>';
       }).join('') + '</div>';
       h += '<section class="hero"><h1>' + hd[0] + '</h1><span class="hero-tag">' + hd[2] + '</span></section>';
-      h += '<div class="seg" role="group" aria-label="작성 방식"><button data-act="setMulti" data-v="0" aria-pressed="' + !multi + '">한 업체 작성</button><button data-act="setMulti" data-v="1" aria-pressed="' + multi + '">여러 업체 작성</button></div>';
       if (!multi) {
         var last = list.filter(function (c) { return c.id === Settings.get('currentId'); })[0] || list[0];
         if (last) {
-          h += '<div class="card"><div class="card-sub">작성 중인 업체 · ' + DOCS[doc].name + '</div><div class="card-title">' + esc(last.info.company || '업체명 미입력') + '</div>' +
+          h += '<div class="card"><div class="card-sub">작성 중인 보고서' + (DOC_ON.length > 1 ? ' · ' + DOCS[doc].name : '') + '</div><div class="card-title">' + esc(last.info.company || '업체명 미입력') + '</div>' +
             '<div class="card-sub">' + esc(docStatus(migrate(last))) + '</div>' +
             '<div class="row2 home-btns"><button class="btn btn-primary" data-act="open" data-id="' + last.id + '">이어서 작성 ▶</button>' +
             '<button class="btn btn-ghost" data-act="restart" data-id="' + last.id + '">새로 작성</button></div></div>';
@@ -266,7 +265,7 @@
     if (doc === 'plan') { var n = (c.docs.plan.units || []).length; return n ? '장비 ' + n + '대' : '장비 아직 없음'; }
     if (doc === 'sedu') { var e = c.docs.sedu; return e.date ? '교육일 ' + e.date.replace(/-/g, '.') : '교육일 미입력'; }
     ev = ev || L.evalSummary(c);
-    return (c.info.contract || '') + (ev.done ? ' · 질문 완료 (' + ev.grade + ')' : ' · 질문 진행 중');
+    return [c.info.contract || '', ev.done ? '질문 완료 (' + ev.grade + ')' : '질문 진행 중'].filter(Boolean).join(' · ');
   }
 
   /* 1. 기본 정보 */
@@ -1496,7 +1495,6 @@
     var b = e.target.closest('[data-act]'); if (!b) return;
     var act = b.dataset.act;
     switch (act) {
-      case 'setMulti': multi = b.dataset.v === '1'; Settings.set('multi', multi); renderHome(); break;
       case 'home': if (memoKey && memoSnap) { restoreAll(memoSnap); memoKey = null; memoSnap = null; document.getElementById('modal').classList.remove('memo-on'); } setSec = null; goHome(); break;
       case 'menu': stepMenu(); break;
       case 'closeModal': closeModal(); break;

@@ -543,3 +543,34 @@ body.wide .app, body.wide .top-inner { max-width: 1180px; }
 .add-row { display: flex; gap: 8px; margin: 4px 0 6px; }
 .add-row input { flex: 1; min-width: 0; }
 .add-row .btn { flex: none; min-width: 84px; }
+
+/* 한글 파일에서 내용 가져오기 */
+.imp-drop { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; margin: 6px 0 12px; padding: 18px 14px; border: 2.5px dashed var(--accent); border-radius: var(--radius); background: var(--frost); color: var(--ink); cursor: pointer; transition: background .15s, transform .15s; }
+.imp-drop:hover, .imp-drop:focus-visible { background: var(--ice); outline: none; }
+.imp-drop.over { background: #dcebf7; border-style: solid; transform: scale(1.01); }
+.imp-drop .imp-ic { font-size: 30px; line-height: 1; }
+.imp-drop b { font-size: 18px; color: var(--accent-dark); }
+.imp-drop span { font-size: 15px; color: var(--muted); }
+.imp-drop .imp-or u { color: var(--accent); font-weight: 700; }
+.imp-drop * { pointer-events: none; }
+.imp-sum { font-size: 16px; margin: 0 0 12px; }
+.imp-sum small { color: var(--muted); }
+.imp-it { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 8px 10px; margin-bottom: 8px; }
+.imp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 16px; cursor: pointer; }
+.imp-row input { width: 22px; height: 22px; accent-color: var(--accent); flex: none; }
+.imp-t { font-weight: 700; flex: 1 1 60%; }
+.ib { font-style: normal; font-size: 13px; font-weight: 700; padding: 2px 7px; border-radius: 7px; }
+.ib.add, .imp-d li.add i { background: var(--go-bg); color: var(--go); }
+.ib.chg, .imp-d li.chg i { background: #fde8b0; color: var(--plow-ink); }
+.ib.del, .imp-d li.del i { background: var(--stop-bg); color: var(--stop); }
+.imp-it details { margin-top: 6px; }
+.imp-it summary { font-size: 14px; color: var(--accent); cursor: pointer; }
+.imp-d { list-style: none; margin: 6px 0 0; padding: 0; font-size: 14px; }
+.imp-d li { padding: 3px 0; border-top: 1px dashed var(--line); }
+.imp-d li i { font-style: normal; font-size: 12px; font-weight: 700; padding: 1px 6px; border-radius: 6px; margin-right: 6px; }
+.imp-d li.del { color: #8a5b5b; text-decoration: line-through; }
+.imp-note { font-size: 14px; color: var(--muted); margin: 10px 0 0; }
+.imp-note.warn { color: var(--warn-ink); background: var(--warn-bg); padding: 8px 10px; border-radius: 10px; }
+.imp-done p { font-size: 16px; margin: 6px 0 14px; }
+.imp-done .btn { width: 100%; margin-bottom: 8px; }
+.imp-d li small { display: block; color: var(--muted); font-size: 12.5px; margin-left: 4px; }

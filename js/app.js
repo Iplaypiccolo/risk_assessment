@@ -1258,7 +1258,7 @@
   function viewSettings() {
     var rv = cur.reviewed || {};
     if (!setSec) {
-      var h = PREVIEW_BTN + '<p class="lead">' + DOCS[doc].name + ' 서류 순서대로 정리했습니다. 항목을 누르면 <b>서류의 표 모양 그대로</b> 나옵니다. 바꾼 내용은 <b>모든 업체의 서류에 똑같이</b> 들어갑니다.</p>';
+      var h = PREVIEW_BTN + (doc === 'ra' ? IMPORT_BOX : '') + '<p class="lead">' + DOCS[doc].name + ' 서류 순서대로 정리했습니다. 항목을 누르면 <b>서류의 표 모양 그대로</b> 나옵니다. 바꾼 내용은 <b>모든 업체의 서류에 똑같이</b> 들어갑니다.</p>';
       docChapters().forEach(function (ch) {
         h += '<section class="toc"><h3 class="toc-h"><span class="toc-no">' + ch.no + '</span>' + esc(ch.title) + '</h3>';
         if (ch.fixed) { h += '<p class="toc-fixed">🔒 ' + esc(ch.fixed) + '</p></section>'; return; }
@@ -1440,6 +1440,117 @@
       var a = document.createElement('a'); a.href = url; a.download = '미리보기_위험성평가.pdf'; document.body.appendChild(a); a.click(); a.remove();
     }).catch(function (e) { busy(false); if (win) win.close(); alert('미리보기를 만들지 못했습니다.\n(' + (e && e.message ? e.message : e) + ')'); });
   }
+  /* ---------- 한글 파일에서 내용 가져오기 ---------- */
+  var IMPORT_BOX = '<div class="imp-drop" data-act="impPick" role="button" tabindex="0">' +
+    '<div class="imp-ic">📄</div><b>한글 파일에서 내용 가져오기</b>' +
+    '<span>내용을 고친 한글 파일(.hwp · .hwpx)을<br>이 틀 안에 끌어다 놓으세요</span>' +
+    '<span class="imp-or">또는 <u>눌러서 파일 고르기</u></span></div>';
+  var impRes = null;
+  function impPick() {
+    var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.hwp,.hwpx,application/x-hwp,application/haansofthwp,application/vnd.hancom.hwpx,application/octet-stream';
+    inp.onchange = function () { if (inp.files[0]) impFile(inp.files[0]); };
+    inp.click();
+  }
+  function impFile(f) {
+    if (!/\.hwpx?$/i.test(f.name || '')) { alert('한글 파일(.hwp 또는 .hwpx)만 넣을 수 있습니다.'); return; }
+    if (f.size > 50 * 1024 * 1024) { alert('파일이 너무 큽니다 (50MB 넘음).'); return; }
+    busy(true, '한글 파일을 읽는 중…<br><small>' + esc(f.name) + '</small>');
+    HwpImport.analyze(f, SET.edit).then(function (r) {
+      busy(false); r.name = f.name; impRes = r; impDraw();
+    }).catch(function (e) {
+      busy(false); console.error(e);
+      alert('이 파일을 읽지 못했습니다.\n(' + (e && e.message ? e.message : e) + ')\n\n.hwp가 안 되면 한글에서 「다른 이름으로 저장 → 파일 형식: HWPX」로 저장한 뒤 다시 넣어 보세요.');
+    });
+  }
+  function impDraw() {
+    var r = impRes, m = document.getElementById('modal');
+    var ch = r.items.filter(function (it) { return it.status === 'changed'; }),
+      same = r.items.filter(function (it) { return it.status === 'same'; }),
+      nf = r.items.filter(function (it) { return it.status === 'notfound'; });
+    var badge = function (it) {
+      var b = [];
+      if (it.add) b.push('<i class="ib add">추가 ' + it.add + '</i>');
+      if (it.chg) b.push('<i class="ib chg">변경 ' + it.chg + '</i>');
+      if (it.del) b.push('<i class="ib del">삭제 ' + it.del + '</i>');
+      return b.join('');
+    };
+    var h = '<div class="memo imp" role="dialog" aria-label="가져오기 확인"><div class="memo-head"><div><small>📄 ' + esc(r.name) + '</small><b>가져올 내용 확인</b></div>' +
+      '<button class="btn btn-sm btn-ghost" data-act="impCancel" aria-label="닫기">✕</button></div><div class="memo-body">';
+    if (!ch.length) {
+      h += '<p class="imp-sum">지금 설정과 <b>다른 내용이 없습니다.</b></p>';
+    } else {
+      h += '<p class="imp-sum">바뀐 항목 <b>' + ch.length + '개</b>를 찾았습니다. 적용할 항목만 체크해 두고 「적용」을 누르세요.<br><small>누르기 전에는 아무것도 바뀌지 않습니다.</small></p>';
+      ch.forEach(function (it) {
+        h += '<div class="imp-it"><label class="imp-row"><input type="checkbox" data-imp="' + it.id + '"' + (it._off ? '' : ' checked') + '>' +
+          '<span class="imp-t">' + esc(secNo(it.id) + ' ' + secTitle(it.id)) + '</span>' + badge(it) + '</label>';
+        if (it.detail && it.detail.length) {
+          h += '<details><summary>바뀐 줄 보기</summary><ul class="imp-d">' + it.detail.map(function (d) {
+            var cls = d.k === '+' ? 'add' : d.k === '-' ? 'del' : 'chg', lab = d.k === '+' ? '추가' : d.k === '-' ? '삭제' : '변경';
+            return '<li class="' + cls + '"><i>' + lab + '</i>' + esc(String(d.t).replace(/\s+/g, ' ').slice(0, 90)) + (d.was && d.was !== d.t ? '<small>이전: ' + esc(String(d.was).replace(/\s+/g, ' ').slice(0, 60)) + '</small>' : '') + '</li>';
+          }).join('') + '</ul></details>';
+        }
+        h += '</div>';
+      });
+    }
+    if (same.length) h += '<p class="imp-note">✔ 같음 (' + same.length + '개): ' + same.map(function (it) { return esc(secTitle(it.id)); }).join(', ') + '</p>';
+    if (nf.length) h += '<p class="imp-note warn">⚠ 파일에서 찾지 못해 그대로 두는 항목 (' + nf.length + '개): ' + nf.map(function (it) { return esc(secTitle(it.id)); }).join(', ') + '<br><small>표 제목이나 첫 줄(제목줄) 글자가 원본과 다르면 찾지 못합니다.</small></p>';
+    h += '</div><div class="memo-foot"><span class="sp"></span>' +
+      (ch.length ? '<button class="btn btn-ghost" data-act="impCancel">취소</button><button class="btn btn-primary" data-act="impApply">적용</button>' : '<button class="btn btn-primary" data-act="impCancel">닫기</button>') +
+      '</div></div>';
+    m.innerHTML = h; m.hidden = false; m.classList.add('memo-on'); document.body.classList.add('noscroll');
+  }
+  /* 파일에 없는 값(예산 금액, 청취조사 근로자 등)은 지금 값을 그대로 둠 */
+  function impMerge(oldV, newV) {
+    if (!Array.isArray(newV) || !Array.isArray(oldV)) return clone(newV);
+    return newV.map(function (n, i) {
+      var o = oldV[i];
+      if (!n || typeof n !== 'object' || Array.isArray(n) || !o || typeof o !== 'object') return clone(n);
+      var r = clone(o);
+      Object.keys(n).forEach(function (k) { r[k] = (Array.isArray(n[k]) && Array.isArray(o[k]) && n[k].length && typeof n[k][0] === 'object') ? impMerge(o[k], n[k]) : clone(n[k]); });
+      return r;
+    });
+  }
+  function impApply() {
+    var picked = Array.prototype.filter.call(document.querySelectorAll('[data-imp]'), function (x) { return x.checked; }).map(function (x) { return x.dataset.imp; });
+    if (!picked.length) { toast('적용할 항목을 체크해 주세요.'); return; }
+    SET.reviewed = SET.reviewed || {};
+    impRes.items.forEach(function (it) {
+      if (picked.indexOf(it.id) < 0) return;
+      Object.keys(it.values).forEach(function (p) { setP(SET.edit, p, impMerge(getP(SET.edit, p), it.values[p])); });
+      SET.reviewed[it.id] = 'edited';
+    });
+    T.upgradeEdit(SET.edit);
+    impRes = null; cur = SET; save(true);
+    var m = document.getElementById('modal'); m.classList.remove('memo-on'); closeModal(); render();
+    m.innerHTML = '<div class="menu imp-done"><div class="addr-head"><b>✔ ' + picked.length + '개 항목을 적용했습니다</b></div>' +
+      '<p>바뀐 항목은 목록에 「✎ 수정함」으로 표시됩니다.<br>보고서에 잘 들어갔는지 미리보기로 확인해 보세요.</p>' +
+      '<button class="btn btn-primary btn-big" data-act="impPreview">👀 보고서 미리보기 (PDF)</button><button class="btn btn-ghost" data-act="closeModal">닫기</button></div>';
+    m.hidden = false; document.body.classList.add('noscroll');
+  }
+  function impClose() { impRes = null; var m = document.getElementById('modal'); m.classList.remove('memo-on'); closeModal(); }
+  /* 끌어다 놓기 */
+  function impZone(e) { return e.target && e.target.closest ? e.target.closest('.imp-drop') : null; }
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      if (view !== 'settings') return;
+      e.preventDefault();
+      var z = impZone(e);
+      Array.prototype.forEach.call(document.querySelectorAll('.imp-drop'), function (x) { x.classList.toggle('over', x === z); });
+      if (e.dataTransfer) e.dataTransfer.dropEffect = z ? 'copy' : 'none';
+    });
+  });
+  document.addEventListener('dragleave', function (e) { var z = impZone(e); if (z && !z.contains(e.relatedTarget)) z.classList.remove('over'); });
+  document.addEventListener('drop', function (e) {
+    if (view !== 'settings') return;
+    e.preventDefault();
+    var z = impZone(e);
+    Array.prototype.forEach.call(document.querySelectorAll('.imp-drop'), function (x) { x.classList.remove('over'); });
+    if (!z) { if (e.dataTransfer && e.dataTransfer.files.length) toast('파란 점선 틀 안에 놓아 주세요.'); return; }
+    var f = e.dataTransfer && e.dataTransfer.files[0];
+    if (f) impFile(f);
+  });
+  document.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('imp-drop')) { e.preventDefault(); impPick(); } });
+
   function busy(on, msg) {
     var m = document.getElementById('modal');
     if (on) { m.innerHTML = '<div class="busy"><div class="spin"></div><div>' + msg + '</div></div>'; m.hidden = false; }
@@ -1463,7 +1574,7 @@
       }).embed(wrap);
     }).catch(function () { postLoaded = null; document.getElementById('addrWrap').innerHTML = '<p class="note">주소 검색을 불러오지 못했습니다. 직접 입력해 주세요.</p>'; });
   }
-  function closeModal() { var m = document.getElementById('modal'); m.hidden = true; m.innerHTML = ''; document.body.classList.remove('noscroll'); }
+  function closeModal() { var m = document.getElementById('modal'); m.hidden = true; m.innerHTML = ''; m.classList.remove('memo-on'); impRes = null; document.body.classList.remove('noscroll'); }
   function stepMenu() {
     var m = document.getElementById('modal');
     m.innerHTML = '<div class="menu"><div class="addr-head"><b>단계 목록</b><button class="btn btn-sm btn-ghost" data-act="closeModal">닫기</button></div>' +
@@ -1563,6 +1674,10 @@
       case 'goto': closeModal(); goStep(+b.dataset.i); break;
       case 'settings': cur = SET; view = 'settings'; setSec = null; showEd = true; listScroll = 0; render(); window.scrollTo(0, 0); break;
       case 'setPreview': previewSettings(); break;
+      case 'impPick': impPick(); break;
+      case 'impCancel': impClose(); break;
+      case 'impApply': impApply(); break;
+      case 'impPreview': closeModal(); previewSettings(); break;
       case 'setOpen': listScroll = window.scrollY; setSec = b.dataset.sec; render(); window.scrollTo(0, 0); break;
       case 'setBack': setSec = null; render(); window.scrollTo(0, listScroll); break;
       case 'setOk': cur.reviewed = cur.reviewed || {}; if (cur.reviewed[setSec] !== 'edited') cur.reviewed[setSec] = 'ok'; save(true); setSec = null; render(); window.scrollTo(0, listScroll); toast('확인했습니다.'); break;

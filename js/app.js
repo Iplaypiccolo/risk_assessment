@@ -47,7 +47,9 @@
       { key: 'done', title: 'PDF 받기', short: 'PDF', icon: IC.done }
     ], hero: ['특별교육<br>안전교육일지 만들기', '교육한 날과 참석 여부만 답하면<br>교육일지와 참석자 명단이 완성됩니다.', '교육일지 · 참석자 명단 · 사진대지'] }
   };
-  var doc = DOCS[Settings.get('doc', 'ra')] ? Settings.get('doc', 'ra') : 'ra';
+  /* 지금은 위험성평가만 씀. 작업계획서·특별교육은 코드만 남겨 두고 화면에서 뺌 (다시 쓰려면 아래 목록에 넣기) */
+  var DOC_ON = ['ra'];
+  var doc = DOC_ON.indexOf(Settings.get('doc', 'ra')) >= 0 ? Settings.get('doc', 'ra') : DOC_ON[0];
   STEPS = DOCS[doc].steps;
   function setDoc(d) { doc = d; Settings.set('doc', d); STEPS = DOCS[d].steps; }
   function svg(paths) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>'; }
@@ -165,17 +167,17 @@
   function render() {
     var nav = document.getElementById('bottomNav'), prog = document.getElementById('progress'), menu = document.getElementById('topMenu');
     var sub = document.getElementById('topSub');
-    if (sub) sub.textContent = view === 'step' && cur ? (cur.info.company || '업체명 미입력') + ' · ' + DOCS[doc].name : view === 'settings' ? DOCS[doc].name + ' · 모든 업체에 똑같이 적용' : '위험성평가 · 작업계획서 · 특별교육';
+    if (sub) sub.textContent = view === 'step' && cur ? (cur.info.company || '업체명 미입력') + (DOC_ON.length > 1 ? ' · ' + DOCS[doc].name : '') : view === 'settings' ? '모든 업체에 똑같이 적용' : '위험성평가 · 작업계획서 · 특별교육';
     nav.classList.toggle('compact', view === 'settings');
     document.body.classList.toggle('wide', view === 'settings' && !!setSec);
     if (view === 'home') {
-      document.getElementById('topTitle').textContent = '제설작업 안전 서류 만들기';
+      document.getElementById('topTitle').textContent = DOC_ON.length > 1 ? '제설작업 안전 서류 만들기' : '위험성평가 보고서 만들기';
       nav.hidden = true; prog.hidden = true; menu.hidden = true;
       renderHome(); return;
     }
     var bp = document.getElementById('btnPrev'), bn = document.getElementById('btnNext');
     if (view === 'settings') {
-      document.getElementById('topTitle').textContent = setSec ? secNo(setSec) + '. ' + secTitle(setSec) : DOCS[doc].name + ' 기본 내용 바꾸기';
+      document.getElementById('topTitle').textContent = setSec ? secNo(setSec) + '. ' + secTitle(setSec) : (DOC_ON.length > 1 ? DOCS[doc].name : '보고서') + ' 기본 내용 바꾸기';
       prog.hidden = true; menu.hidden = true;
       if (!setSec) nav.hidden = true;
       else {
@@ -221,7 +223,7 @@
   function renderHome() {
     Store.all().then(function (list) {
       var hd = DOCS[doc].hero;
-      var h = '<div class="doc-tabs" role="tablist" aria-label="만들 서류">' + Object.keys(DOCS).map(function (k) {
+      var h = DOC_ON.length < 2 ? '' : '<div class="doc-tabs" role="tablist" aria-label="만들 서류">' + DOC_ON.map(function (k) {
         return '<button role="tab" data-act="docSel" data-v="' + k + '" aria-selected="' + (k === doc) + '">' + DOCS[k].name + '</button>';
       }).join('') + '</div>';
       h += '<section class="hero"><h1>' + hd[0] + '</h1><span class="hero-tag">' + hd[2] + '</span></section>';
@@ -254,8 +256,8 @@
         });
       }
       h += '<div class="home-tools">' +
-        '<button class="btn btn-ghost btn-big" data-act="settings">⚙ ' + DOCS[doc].name + ' 기본 내용 바꾸기</button>' +
-        '<details class="more"><summary>기본 내용 설정 저장 · 불러오기</summary><p class="note">세 서류(위험성평가·작업계획서·특별교육)의 「기본 내용 바꾸기」에서 고친 설정만 파일(.json)로 저장하고 불러옵니다. 업체가 작성한 내용은 들어가지 않습니다. 이 파일을 다른 분께 보내 「불러오기」 하면 같은 설정으로 보고서를 만들 수 있습니다.</p><div class="row2"><button class="btn btn-ghost" data-act="export">설정 저장</button><button class="btn btn-ghost" data-act="import">설정 불러오기</button></div></details></div>';
+        '<button class="btn btn-ghost btn-big" data-act="settings">⚙ ' + (DOC_ON.length > 1 ? DOCS[doc].name : '보고서') + ' 기본 내용 바꾸기</button>' +
+        '<details class="more"><summary>기본 내용 설정 저장 · 불러오기</summary><p class="note">「보고서 기본 내용 바꾸기」에서 고친 설정만 파일(.json)로 저장하고 불러옵니다. 업체가 작성한 내용은 들어가지 않습니다. 이 파일을 다른 분께 보내 「불러오기」 하면 같은 설정으로 보고서를 만들 수 있습니다.</p><div class="row2"><button class="btn btn-ghost" data-act="export">설정 저장</button><button class="btn btn-ghost" data-act="import">설정 불러오기</button></div></details></div>';
       $app.innerHTML = h;
     });
   }

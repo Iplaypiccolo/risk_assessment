@@ -539,3 +539,7 @@ body.wide .app, body.wide .top-inner { max-width: 1180px; }
 .set-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0 4px; }
 .set-top .set-back { margin: 0; }
 .set-top .btn-preview { width: auto; margin: 0 0 0 auto; }
+.chip.add.open { border-style: solid; border-color: var(--accent); color: var(--accent); }
+.add-row { display: flex; gap: 8px; margin: 4px 0 6px; }
+.add-row input { flex: 1; min-width: 0; }
+.add-row .btn { flex: none; min-width: 84px; }

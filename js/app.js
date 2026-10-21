@@ -152,15 +152,22 @@
     var chips = '', hideInput = false;
     if (o.chips) {
       var known = o.chips.some(function (c) { return (Array.isArray(c) ? c[0] : c) === v; });
-      var custom = o.add && (customOpen[path] || (v !== '' && !known));
-      chips = '<div class="chips">' + o.chips.map(function (c) {
+      var list = o.chips.slice();
+      if (o.add && v !== '' && !known) list.push(v);   // 직접 적어 넣은 값도 칩으로 보여 줌 (체크된 상태)
+      var opening = o.add && customOpen[path];
+      chips = '<div class="chips">' + list.map(function (c) {
         var val = Array.isArray(c) ? c[0] : c, lab = Array.isArray(c) ? c[1] : c;
         return '<button type="button" class="chip' + (o.cbx ? ' cbx' : '') + (v === val ? ' on' : '') + '" data-act="chip" data-path="' + path + '" data-val="' + esc(val) + '">' + esc(lab) + '</button>';
-      }).join('') + (o.add ? '<button type="button" class="chip add' + (o.cbx ? ' cbx' : '') + (custom ? ' on' : '') + '" data-act="chipAdd" data-path="' + path + '">' + (o.cbx ? '추가하기' : '＋ 추가하기') + '</button>' : '') + '</div>';
-      if (o.add && !custom) hideInput = true;
+      }).join('') + (o.add ? '<button type="button" class="chip add' + (opening ? ' open' : '') + '" data-act="chipAdd" data-path="' + path + '">＋ 추가하기</button>' : '') + '</div>';
+      /* 「추가하기」: 적고 「확인」을 눌러야 들어감 */
+      if (o.add) {
+        hideInput = true;
+        if (opening) chips += '<div class="add-row"><input type="text" autocomplete="off" data-addin="' + path + '"' + ph + '><button type="button" class="btn btn-primary" data-act="chipAddOk" data-path="' + path + '">확인</button></div>';
+      }
     }
-    return '<label class="field' + (o.cls ? ' ' + o.cls : '') + '"><span class="lab">' + label + (o.req ? ' <em class="req">필수</em>' : '') + '</span>' +
-      (o.hint ? '<span class="hint">' + o.hint + '</span>' : '') + chips + (o.noInput || hideInput ? '' : input) + (o.after || '') + '</label>';
+    var tag = o.chips ? 'div' : 'label';
+    return '<' + tag + ' class="field' + (o.cls ? ' ' + o.cls : '') + '"><span class="lab">' + label + (o.req ? ' <em class="req">필수</em>' : '') + '</span>' +
+      (o.hint ? '<span class="hint">' + o.hint + '</span>' : '') + chips + (o.noInput || hideInput ? '' : input) + (o.after || '') + '</' + tag + '>';
   }
 
   /* ---------- 화면 그리기 ---------- */
@@ -305,7 +312,7 @@
       field('대표자 성명', 'info.ceo', { req: 1, ph: '예) 홍길동' }) +
       field('대표자 휴대폰', 'info.ceoPhone', { type: 'tel', ph: '010-0000-0000' }) +
       field('일하는 도로공사 지사', 'info.branch', { ph: '예) 영동', hint: '「○○지사」의 ○○만 적으세요. 가까운 병원·119를 찾을 때 씁니다.' }) +
-      field('업종', 'info.bizType', { chips: ['건설기계 대여업', '화물 운송업'], add: 1, ph: '업종을 적어 주세요' }) +
+      field('업종', 'info.bizType', { chips: ['건설기계 대여업', '화물 운송업'], add: 1, ph: '예) 제설용역업' }) +
       '<label class="field"><span class="lab">사업장 주소</span><button type="button" class="btn btn-ghost" data-act="addr">🔍 주소 찾기</button>' +
       '<input type="text" data-bind="info.address" value="' + esc(cur.info.address || '') + '" placeholder="주소 찾기를 누르거나 직접 입력">' +
       '<input type="text" data-bind="info.addressDetail" value="' + esc(cur.info.addressDetail || '') + '" placeholder="나머지 주소 (동·호수 등)"></label>' +
@@ -320,7 +327,7 @@
       h += '<div class="card"><div class="card-head"><b>근로자 ' + (i + 1) + '</b>' + (cur.workers.length > 1 ? '<button class="btn btn-danger btn-sm" data-act="delWorker" data-i="' + i + '">삭제</button>' : '') + '</div>' +
         field('이름', 'workers.' + i + '.name', { ph: '예) 김영수' }) +
         field('휴대폰', 'workers.' + i + '.phone', { type: 'tel', ph: '010-0000-0000' }) +
-        field('하는 일', 'workers.' + i + '.role', { chips: ['운전원'], add: 1, cbx: 1, ph: '하는 일을 적어 주세요 (예: 신호수)' }) + '</div>';
+        field('하는 일', 'workers.' + i + '.role', { chips: ['운전원'], add: 1, cbx: 1, ph: '예) 신호수' }) + '</div>';
     });
     h += '<button class="btn btn-ghost btn-big" data-act="addWorker">＋ 근로자 추가</button>';
     if (doc !== 'ra') return h;
@@ -1615,10 +1622,11 @@
       case 'prev': if (stepIdx === 0) goHome(); else goStep(stepIdx - 1); break;
       case 'next': goStep(stepIdx + 1); break;
       case 'chipAdd': {
-        var ap = b.dataset.path; customOpen[ap] = true; setP(cur, ap, ''); save(); rerender();
-        setTimeout(function () { var inp = $app.querySelector('[data-bind="' + ap + '"]'); if (inp) inp.focus(); }, 30);
+        var ap = b.dataset.path; customOpen[ap] = !customOpen[ap]; rerender();
+        if (customOpen[ap]) setTimeout(function () { var inp = $app.querySelector('[data-addin="' + ap + '"]'); if (inp) inp.focus(); }, 30);
         break;
       }
+      case 'chipAddOk': chipAddOk(b.dataset.path); break;
       case 'chip': {
         var p = b.dataset.path, v = b.dataset.val; customOpen[p] = false;
         setP(cur, p, getP(cur, p) === v && /bizType|role/.test(p) ? '' : v); save(); rerender(); break;
@@ -1746,6 +1754,15 @@
       case 'pdf': save(true); makePdf(false); break;
       case 'pdfView': save(true); makePdf(true); break;
     }
+  });
+  function chipAddOk(path) {
+    var inp = $app.querySelector('[data-addin="' + path + '"]'), val = inp ? inp.value.trim() : '';
+    if (!val) { toast('내용을 적은 뒤 「확인」을 눌러 주세요.'); if (inp) inp.focus(); return; }
+    setP(cur, path, val); customOpen[path] = false; save(); rerender(); toast('「' + val + '」을(를) 넣었습니다.');
+  }
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (e.key === 'Enter' && t.dataset && t.dataset.addin) { e.preventDefault(); chipAddOk(t.dataset.addin); }
   });
   function rerender() { var y = window.scrollY; render(); window.scrollTo(0, y); if (memoKey && view === 'settings') drawMemo(); }
 

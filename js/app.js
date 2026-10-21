@@ -167,7 +167,7 @@
   function render() {
     var nav = document.getElementById('bottomNav'), prog = document.getElementById('progress'), menu = document.getElementById('topMenu');
     var sub = document.getElementById('topSub');
-    if (sub) sub.textContent = view === 'step' && cur ? (cur.info.company || '업체명 미입력') + (DOC_ON.length > 1 ? ' · ' + DOCS[doc].name : '') : view === 'settings' ? '모든 업체에 똑같이 적용' : '위험성평가 · 작업계획서 · 특별교육';
+    if (sub) sub.textContent = view === 'step' && cur ? (cur.info.company || '업체명 미입력') + (DOC_ON.length > 1 ? ' · ' + DOCS[doc].name : '') : view === 'settings' ? '모든 업체에 똑같이 적용' : (DOC_ON.length > 1 ? '위험성평가 · 작업계획서 · 특별교육' : '제설작업 위험성평가 결과보고서');
     nav.classList.toggle('compact', view === 'settings');
     document.body.classList.toggle('wide', view === 'settings' && !!setSec);
     if (view === 'home') {

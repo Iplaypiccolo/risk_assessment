@@ -574,3 +574,8 @@ body.wide .app, body.wide .top-inner { max-width: 1180px; }
 .imp-done p { font-size: 16px; margin: 6px 0 14px; }
 .imp-done .btn { width: 100%; margin-bottom: 8px; }
 .imp-d li small { display: block; color: var(--muted); font-size: 12.5px; margin-left: 4px; }
+
+/* Word로 받기 */
+.btn-word { background: #fff; border: 2px solid #2B579A; color: #2B579A; font-weight: 800; }
+.btn-word:active { background: #EAF0F8; }
+.note.word-note { margin-top: -2px; }

@@ -706,6 +706,8 @@
     }).join('') + '</div>';
     if (checks.some(function (c) { return !c[0]; })) h += '<p class="note">빠진 것이 있어도 PDF는 만들 수 있습니다. 빈칸은 비워진 채로 나옵니다.</p>';
     h += '<button class="btn btn-primary btn-huge" data-act="pdf">📄 PDF 받기</button>' +
+      '<button class="btn btn-word btn-big" data-act="word">📝 Word로 받기</button>' +
+      '<p class="note word-note">Word 파일은 Word나 한글에서 열어 고칠 수 있어요. 쪽 나눔·줄 간격은 PDF와 조금 다를 수 있습니다.</p>' +
       '<button class="btn btn-ghost btn-big" data-act="pdfView">👀 PDF 미리 보기</button>' +
       '<p class="note">처음 만들 때는 글꼴을 받느라 10~20초 걸릴 수 있어요.</p>' + signGuide();
     return h;
@@ -1415,6 +1417,25 @@
       console.error(e); alert('PDF를 만들지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.\n(' + (e && e.message ? e.message : e) + ')');
     });
   }
+  /* Word(.docx): PDF와 같은 문서 정의를 Word 형식으로 바꿈 */
+  var docxLibP = null;
+  function makeWord() {
+    busy(true, 'Word 파일을 만드는 중입니다…');
+    docxLibP = docxLibP || loadScript('lib/docx.min.js').catch(function (e) { docxLibP = null; throw e; });
+    var ip = flowCache ? Promise.resolve(flowCache) : fetchDataURL('img/flow.jpg').then(function (d) { flowCache = d; return d; });
+    Promise.all([docxLibP, ip]).then(function (r) {
+      return WORDDOC.toBlob(PDFDOC.build(cur, { flow: r[1], edit: E() }));
+    }).then(function (blob) {
+      busy(false);
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href = url; a.download = fileName().replace(/\.pdf$/, '.docx'); document.body.appendChild(a); a.click(); a.remove();
+      toast('Word 파일을 저장했습니다. 「다운로드」 폴더를 확인하세요.');
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    }).catch(function (e) {
+      busy(false); console.error(e);
+      alert('Word 파일을 만들지 못했습니다. 인터넷 연결을 확인하고 다시 눌러 주세요.\n(' + (e && e.message ? e.message : e) + ')');
+    });
+  }
   /* 기본 내용 바꾸기: 고친 내용이 보고서에 어떻게 나오는지 예시 업체로 PDF 미리보기 */
   var PREVIEW_BTN = '<button class="btn btn-ghost btn-preview" data-act="setPreview">👀 보고서 미리보기 (PDF)</button>';
   function sampleCompany() {
@@ -1868,6 +1889,7 @@
       case 'ckReset': if (confirm('이 장비의 점검 답을 모두 지우고 처음부터 할까요?')) { var su = cur.docs.plan.units[+b.dataset.u]; su.ans = {}; su.act = {}; ckAct = null; save(); render(); window.scrollTo(0, 0); } break;
       case 'pdf': save(true); makePdf(false); break;
       case 'pdfView': save(true); makePdf(true); break;
+      case 'word': save(true); makeWord(); break;
     }
   });
   function chipAddOk(path) {

@@ -56,13 +56,15 @@
   };
 
   /* 답변을 따라가며 경로(물어본 질문 목록)와 결과를 계산 */
+  /* 답을 따라가며 경로(물어본 질문 목록)와 점수를 계산.
+   * 중간에 안 한 질문이 있어도 그 뒤 항목의 점수는 그대로 계산 (경로는 처음 안 한 질문까지만) */
   function walk(answers, acc) {
     var path = [], results = {}, pending = null;
     for (var r = 0; r < ROOTS.length; r++) {
       var id = ROOTS[r];
       while (id) {
         var q = Q[id];
-        path.push(id);
+        if (!pending) path.push(id);
         var a = answers[id];
         if (!a) { pending = pending || id; id = null; break; }
         if (q.type === 'count') {
@@ -76,7 +78,6 @@
         if (nx && nx.exclude) results[q.item] = 'exclude';
         id = null;
       }
-      if (pending) break;
     }
     return { path: path, results: results, pending: pending };
   }

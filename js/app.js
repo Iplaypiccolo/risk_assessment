@@ -312,7 +312,7 @@
       field('대표자 성명', 'info.ceo', { req: 1, ph: '예) 홍길동' }) +
       field('대표자 휴대폰', 'info.ceoPhone', { type: 'tel', ph: '010-0000-0000' }) +
       field('일하는 도로공사 지사', 'info.branch', { ph: '예) 영동', hint: '「○○지사」의 ○○만 적으세요. 가까운 병원·119를 찾을 때 씁니다.' }) +
-      field('업종', 'info.bizType', { chips: ['건설기계 대여업', '화물 운송업'], add: 1, ph: '예) 제설용역업' }) +
+      field('업종', 'info.bizType', { chips: ['건설기계 대여업', '화물 운송업', '건설업'], add: 1, ph: '예) 제설용역업' }) +
       '<label class="field"><span class="lab">사업장 주소</span><button type="button" class="btn btn-ghost" data-act="addr">🔍 주소 찾기</button>' +
       '<input type="text" data-bind="info.address" value="' + esc(cur.info.address || '') + '" placeholder="주소 찾기를 누르거나 직접 입력">' +
       '<input type="text" data-bind="info.addressDetail" value="' + esc(cur.info.addressDetail || '') + '" placeholder="나머지 주소 (동·호수 등)"></label>' +

@@ -68,7 +68,7 @@
   var SEDU_SLOTS = [{ k: 'sedu1', label: '교육 사진 ①', aspect: 1.42 }, { k: 'sedu2', label: '교육 사진 ②', aspect: 1.42 }];
   var ALL_SLOTS = PHOTO_SLOTS.concat(SEDU_SLOTS);
   var RELS = [['母', '어머니'], ['父', '아버지'], ['妻', '아내'], ['夫', '남편'], ['子', '아들'], ['女', '딸'], ['兄', '형·오빠'], ['姉', '누나·언니'], ['弟', '동생'], ['妹', '여동생'], ['孫', '손주']];
-  var AGENCIES = [['fire', '119 안전센터', '예) 강릉 119안전센터'], ['hospital', '병원', '예) 강릉○○병원'], ['police', '경찰서', '예) 강릉경찰서'], ['patrol', '고속도로 순찰대', '예) 고속도로순찰대 제○지구대']];
+  var AGENCIES = [['fire', '119 안전센터', '예) 강릉 119안전센터'], ['hospital', '병원', '예) 강릉○○병원'], ['police', '경찰서 · 지구대 · 파출소', '예) 강릉경찰서, ○○지구대'], ['patrol', '고속도로 순찰대', '예) 고속도로순찰대 제○지구대']];
 
   /* ---------- 공통 도우미 ---------- */
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -468,7 +468,7 @@
     Near.find(mode, cur.info.branch, cur.info.address, { loc: useLoc }).then(function (r) {
       busy(false); nearCache[cur.id] = r;
       AGENCIES.forEach(function (a) {
-        var k = a[0], first = r[k] && r[k][0];
+        var k = a[0], first = r[k] && (r[k].filter(function (p) { return p.phone; })[0] || r[k][0]);   // 전화번호 있는 가장 가까운 곳
         if (first) cur.agencies[k] = { name: first.name, phone: first.phone };
       });
       save(); rerender(); toast('가장 가까운 곳을 넣었습니다. 다른 곳을 누르면 바뀝니다.');

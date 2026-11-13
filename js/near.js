@@ -8,7 +8,13 @@
     /* 병원은 카카오 「병원」 분류(HP8)에서만 찾음 → 「응급실 ○○떡볶이」 같은 음식점이 안 나옴 */
     hospital: { label: '병원', color: '#0e7a55', words: ['응급실', '종합병원', '병원'], cat: 'HP8',
       ok: function (p) { return p.category_group_code === 'HP8' && /병원|의료원/.test(p.place_name) && !/동물|한의원|치과|요양|한방|정신/.test(p.place_name + p.category_name); } },
-    police: { label: '경찰서', color: '#1f5f8f', words: ['경찰서'], ok: function (p) { return /경찰서$/.test(p.place_name.trim()); } },
+    /* 경찰서뿐 아니라 지구대·파출소·치안센터도 (카카오맵에서 「경찰서」로 찾으면 나오는 곳들). 고속도로 순찰대는 따로 */
+    police: { label: '경찰서·지구대·파출소', color: '#1f5f8f', words: ['경찰서', '지구대', '파출소', '치안센터'], all: true,
+      ok: function (p) {
+        var n = p.place_name.trim(), c = p.category_name || '';
+        if (/순찰대/.test(n)) return false;
+        return /(경찰서|지구대|파출소|치안센터)$/.test(n) || (/경찰서/.test(c) && /(경찰|지구대|파출소|치안센터)/.test(n));
+      } },
     patrol: { label: '고속도로 순찰대', color: '#b26a00', words: ['고속도로순찰대', '고속도로 순찰대'], ok: function (p) { return /순찰대/.test(p.place_name); } }
   };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -101,12 +107,12 @@
       function pass(opt, maxM) {
         var ws = K.words.slice();
         function nextWord() {
-          if (!ws.length || found.length >= n) return Promise.resolve();
+          if (!ws.length || (!K.all && found.length >= n)) return Promise.resolve();   // all: 모든 낱말로 찾아 가까운 순으로
           return kw(k, ps, ws.shift(), K.cat ? Object.assign({ category_group_code: K.cat }, opt) : opt).then(function (d) {
             d.filter(notShop).filter(K.ok).forEach(function (p) {
               var m = +p.distance || 0;
               if (maxM && m > maxM) return;
-              if (found.length < n && !found.some(function (f) { return f.name === p.place_name; }))
+              if ((K.all || found.length < n) && !found.some(function (f) { return f.name === p.place_name; }))
                 found.push({ name: p.place_name, phone: p.phone || '', dist: fmtDist(m), meters: m, lat: +p.y, lng: +p.x });
             });
             return nextWord();
@@ -121,6 +127,7 @@
         return pass({ location: center, sort: k.maps.services.SortBy.DISTANCE }, WIDE_M);
       }).then(function () {
         found.sort(function (a, b) { return a.meters - b.meters; });
+        found = found.slice(0, n);
         found.wide = wide;
         return found;
       });

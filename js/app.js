@@ -441,7 +441,8 @@
       var k = a[0], list = nr && nr[k];
       h += '<div class="card"><div class="card-head"><b>' + a[1] + '</b>' + (Near.hasKey() ? '<button class="btn btn-sm btn-ghost" data-act="nearMap" data-k="' + k + '">🗺 지도에서 고르기</button>' : '<a class="btn btn-sm btn-ghost" target="_blank" rel="noopener" href="' + esc(Near.mapLink(k, cur.info.branch, cur.info.address)) + '">카카오맵에서 찾기</a>') + '</div>';
       if (list) {
-        if (!list.length) h += '<p class="hint">근처에서 찾지 못했어요. 직접 적어 주세요.</p>';
+        if (!list.length) h += '<p class="hint">50km 안에서 찾지 못했어요. 직접 적어 주세요.</p>';
+        else if (list.wide) h += '<p class="hint">20km 안에 없어서 50km까지 넓혀 찾았어요.</p>';
         else h += '<div class="pick-list">' + list.map(function (p, i) {
           var on = cur.agencies[k].name === p.name;
           return '<button class="pick' + (on ? ' on' : '') + '" data-act="nearPick" data-k="' + k + '" data-i="' + i + '"><b>' + (on ? '✔ ' : '') + esc(p.name) + '</b><span>' + esc(p.phone || '전화번호 없음') + ' · ' + esc(p.dist) + '</span></button>';
@@ -460,11 +461,11 @@
       (v && !known ? '<option value="' + esc(v) + '" selected>' + esc(v) + '</option>' : '') +
       '</select></label>';
   }
-  function nearFind(mode) {
+  function nearFind(mode, useLoc) {
     mode = mode || nearMode;
     if (mode === 'base' && !cur.info.branch && !cur.info.address) { alert('「기본 정보」에서 일하는 지사 이름이나 사업장 주소를 먼저 적어 주세요.'); return; }
     busy(true, mode === 'gps' ? '내 위치를 확인하는 중…<br><small>위치 사용을 허락해 주세요</small>' : '가까운 곳을 찾는 중…');
-    Near.find(mode, cur.info.branch, cur.info.address).then(function (r) {
+    Near.find(mode, cur.info.branch, cur.info.address, { loc: useLoc }).then(function (r) {
       busy(false); nearCache[cur.id] = r;
       AGENCIES.forEach(function (a) {
         var k = a[0], first = r[k] && r[k][0];
@@ -474,6 +475,13 @@
     }).catch(function (e) {
       busy(false);
       var m = e && e.message;
+      if (m === 'GPS_ROUGH' || m === 'GPS_FAR') {
+        var t = '내 위치가 정확하지 않아요.\n' + Near.roughText(e) + '\n\n';
+        if (cur.info.branch || cur.info.address) {
+          if (confirm(t + '「확인」: 지사 근처로 찾기\n「취소」: 그래도 이 위치로 찾기')) { nearMode = 'base'; nearFind('base'); } else nearFind('gps', e.loc);
+        } else if (confirm(t + '그래도 이 위치로 찾을까요?\n(「기본 정보」에 지사 이름을 적으면 지사 근처로 찾을 수 있어요)')) nearFind('gps', e.loc);
+        return;
+      }
       if ((m === 'GPS_DENIED' || m === 'NO_GPS') && (cur.info.branch || cur.info.address)) {
         if (confirm((m === 'GPS_DENIED' ? '위치 사용이 허락되지 않았어요.' : '내 위치를 알 수 없어요.') + '\n대신 「지사 근처」로 찾을까요?')) { nearMode = 'base'; nearFind('base'); }
         return;

@@ -39,8 +39,8 @@
   function gps() {
     return new Promise(function (res, rej) {
       if (!navigator.geolocation) return rej(new Error('NO_GPS'));
-      navigator.geolocation.getCurrentPosition(function (p) { res({ lat: p.coords.latitude, lng: p.coords.longitude, label: '지금 내 위치' }); },
-        function (e) { rej(new Error(e && e.code === 1 ? 'GPS_DENIED' : 'NO_GPS')); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+      navigator.geolocation.getCurrentPosition(function (p) { res({ lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy || 0), label: '지금 내 위치' }); },
+        function (e) { rej(new Error(e && e.code === 1 ? 'GPS_DENIED' : 'NO_GPS')); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
     });
   }
   /* 지사 → 주소 순서로 위치 찾기 */
@@ -64,25 +64,66 @@
     function next() { if (i >= tries.length) return Promise.resolve(null); return tries[i++]().then(function (r) { return r || next(); }); }
     return next().then(function (r) { if (!r) throw new Error('NO_BASE'); return r; });
   }
-  function locate(mode, branch, address) {
-    return load().then(function (k) { return mode === 'gps' ? gps() : basePoint(k, branch, address); });
+  /* 두 점 사이 거리 (m) */
+  function distM(a, b) {
+    var R = 6371000, r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lng - a.lng) * r;
+    var h = Math.sin(dLa / 2) * Math.sin(dLa / 2) + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) * Math.sin(dLo / 2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  var ROUGH_M = 5000, FAR_M = 60000, WIDE_M = 50000;
+  /* 「내 위치」가 믿을 만한지 확인:
+   * - 오차가 5km보다 크면 GPS가 아니라 인터넷 회선 위치 → GPS_ROUGH
+   * - 지사에서 60km보다 멀면 회사 인터넷(본사 등) 위치가 잡힌 것 → GPS_FAR
+   * opt.loc 이 있으면 그 위치를 확인 없이 그대로 씀 */
+  function locate(mode, branch, address, opt) {
+    opt = opt || {};
+    return load().then(function (k) {
+      if (mode !== 'gps') return basePoint(k, branch, address);
+      if (opt.loc) return opt.loc;   // 「그래도 이 위치로」: 방금 잡은 위치를 그대로 씀
+      return gps().then(function (me) {
+        var err = function (code, extra) { var e = new Error(code); Object.assign(e, { loc: me }, extra || {}); return e; };
+        if (me.acc > ROUGH_M) throw err('GPS_ROUGH', { km: Math.round(me.acc / 1000) });
+        if (!branch && !address) return me;
+        return basePoint(k, branch, address).then(function (b) {
+          var d = distM(me, b);
+          if (d > FAR_M) throw err('GPS_FAR', { km: Math.round(d / 1000), base: b });
+          return me;
+        }, function () { return me; });
+      });
+    });
   }
   /* 한 종류의 기관을 가까운 순서로 (최대 n곳) */
   function search(kind, loc, n) {
     return load().then(function (k) {
       var ps = new k.maps.services.Places(), K = KINDS[kind], words = K.words.slice(), found = [];
-      var opt = { location: new k.maps.LatLng(loc.lat, loc.lng), radius: 20000, sort: k.maps.services.SortBy.DISTANCE };
-      function nextWord() {
-        if (!words.length || found.length >= n) return Promise.resolve();
-        return kw(k, ps, words.shift(), K.cat ? Object.assign({ category_group_code: K.cat }, opt) : opt).then(function (d) {
-          d.filter(notShop).filter(K.ok).forEach(function (p) {
-            if (found.length < n && !found.some(function (f) { return f.name === p.place_name; }))
-              found.push({ name: p.place_name, phone: p.phone || '', dist: fmtDist(p.distance), meters: +p.distance || 0, lat: +p.y, lng: +p.x });
+      var center = new k.maps.LatLng(loc.lat, loc.lng);
+      /* 1차: 20km 안 (카카오 검색 반경 최대값) → 하나도 없으면 2차: 반경 없이 가까운 순으로 찾아 50km 안만 */
+      function pass(opt, maxM) {
+        var ws = K.words.slice();
+        function nextWord() {
+          if (!ws.length || found.length >= n) return Promise.resolve();
+          return kw(k, ps, ws.shift(), K.cat ? Object.assign({ category_group_code: K.cat }, opt) : opt).then(function (d) {
+            d.filter(notShop).filter(K.ok).forEach(function (p) {
+              var m = +p.distance || 0;
+              if (maxM && m > maxM) return;
+              if (found.length < n && !found.some(function (f) { return f.name === p.place_name; }))
+                found.push({ name: p.place_name, phone: p.phone || '', dist: fmtDist(m), meters: m, lat: +p.y, lng: +p.x });
+            });
+            return nextWord();
           });
-          return nextWord();
-        });
+        }
+        return nextWord();
       }
-      return nextWord().then(function () { return found.sort(function (a, b) { return a.meters - b.meters; }); });
+      var wide = false;
+      return pass({ location: center, radius: 20000, sort: k.maps.services.SortBy.DISTANCE }).then(function () {
+        if (found.length) return;
+        wide = true;
+        return pass({ location: center, sort: k.maps.services.SortBy.DISTANCE }, WIDE_M);
+      }).then(function () {
+        found.sort(function (a, b) { return a.meters - b.meters; });
+        found.wide = wide;
+        return found;
+      });
     });
   }
 
@@ -108,8 +149,8 @@
       function segState() { Array.prototype.forEach.call(modal.querySelectorAll('.mp-seg button'), function (b) { b.setAttribute('aria-pressed', String(b.dataset.m === mode)); }); }
       function msg(t) { $msg.textContent = t; $msg.hidden = !t; }
       function sheet() {
-        if (!list.length) { $sheet.innerHTML = '<p class="mp-empty">근처 20km 안에서 찾지 못했어요.<br>「지사 근처」로 바꿔 보거나 직접 적어 주세요.</p>'; return; }
-        var h = '';
+        if (!list.length) { $sheet.innerHTML = '<p class="mp-empty">근처 50km 안에서 찾지 못했어요.<br>「지사 근처」로 바꿔 보거나 직접 적어 주세요.</p>'; return; }
+        var h = list.wide ? '<p class="mp-wide">20km 안에 없어서 50km까지 넓혀 찾았어요.</p>' : '';
         if (sel >= 0) {
           var p = list[sel];
           h += '<div class="mp-pick"><div class="mp-name"><span class="mp-no" style="background:' + K.color + '">' + (sel + 1) + '</span>' + esc(p.name) + '</div>' +
@@ -155,10 +196,10 @@
         if (list.length) map.setBounds(bounds, 40, 30, 40, 30); else map.setCenter(new k.maps.LatLng(loc.lat, loc.lng));
       }
       var runId = 0;
-      function run() {
+      function run(useLoc) {
         var my = ++runId; segState(); sel = -1; list = []; $sheet.innerHTML = ''; msg(mode === 'gps' ? '내 위치를 확인하는 중… (위치 사용을 허락해 주세요)' : '지사 위치를 찾는 중…');
         load().then(function (k) {
-          return locate(mode, ctx.branch, ctx.address).then(function (loc) {
+          return locate(mode, ctx.branch, ctx.address, { loc: useLoc }).then(function (loc) {
             if (my !== runId) return;
             msg('가까운 ' + K.label + '을(를) 찾는 중…');
             return search(kind, loc, 10).then(function (r) {
@@ -172,6 +213,15 @@
           var m = e && e.message;
           if (m === 'GPS_DENIED') { msg('위치 사용이 허락되지 않았어요. 「지사 근처」로 찾아 볼게요.'); mode = 'base'; setTimeout(run, 1200); return; }
           if (m === 'NO_GPS') { msg('내 위치를 알 수 없어요. 「지사 근처」로 찾아 볼게요.'); mode = 'base'; setTimeout(run, 1200); return; }
+          if (m === 'GPS_ROUGH' || m === 'GPS_FAR') {
+            msg('');
+            $sheet.innerHTML = '<div class="mp-warn"><b>내 위치가 정확하지 않아요</b><p>' + esc(roughText(e)) + '</p>' +
+              ((ctx.branch || ctx.address) ? '<button class="btn btn-primary btn-big" id="mpBase">🏢 지사 근처로 찾기</button>' : '<p>「기본 정보」에 지사 이름을 적으면 지사 근처로 찾을 수 있어요.</p>') +
+              '<button class="btn btn-ghost" id="mpForce">그래도 이 위치로 찾기</button></div>';
+            var bb = document.getElementById('mpBase'); if (bb) bb.onclick = function () { mode = 'base'; run(); };
+            document.getElementById('mpForce').onclick = function () { run(e.loc); };
+            return;
+          }
           if (m === 'NO_BASE') { msg('지사나 주소 위치를 찾지 못했어요. 「기본 정보」의 지사 이름이나 주소를 확인해 주세요.'); return; }
           msg('지도를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.');
         });
@@ -180,13 +230,19 @@
     });
   }
 
+  /* 위치가 이상할 때 보여 줄 설명 */
+  function roughText(e) {
+    if (e.message === 'GPS_ROUGH') return '이 기기의 위치 오차가 약 ' + e.km + 'km입니다. GPS가 없는 컴퓨터나 회사 인터넷에서는 인터넷 회선이 있는 곳(예: 본사)이 내 위치로 잡힐 수 있어요.';
+    return '잡힌 위치가 지사에서 약 ' + e.km + 'km 떨어져 있어요. 회사 인터넷에 연결되어 있으면 본사 등 다른 곳이 내 위치로 잡힐 수 있어요. 휴대폰의 위치(GPS)를 켜고 다시 해 보거나 「지사 근처」로 찾으세요.';
+  }
   var Near = {
     KINDS: KINDS,
+    roughText: roughText,
     hasKey: function () { return !!key(); },
     /* 네 종류 모두 가장 가까운 곳 찾기: { base: {name}, fire: [...], ... } */
-    find: function (mode, branch, address) {
-      return locate(mode, branch, address).then(function (loc) {
-        var out = { base: { name: loc.label } };
+    find: function (mode, branch, address, opt) {
+      return locate(mode, branch, address, opt).then(function (loc) {
+        var out = { base: { name: loc.label + (loc.acc ? ' (오차 약 ' + fmtDist(loc.acc) + ')' : '') } };
         return Promise.all(Object.keys(KINDS).map(function (kind) {
           return search(kind, loc, 3).then(function (r) { out[kind] = r; });
         })).then(function () { return out; });

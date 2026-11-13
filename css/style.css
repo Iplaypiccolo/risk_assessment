@@ -579,3 +579,8 @@ body.wide .app, body.wide .top-inner { max-width: 1180px; }
 .btn-word { background: #fff; border: 2px solid #2B579A; color: #2B579A; font-weight: 800; }
 .btn-word:active { background: #EAF0F8; }
 .note.word-note { margin-top: -2px; }
+.mp-wide { margin: 0 0 8px; font-size: 14px; color: var(--plow-ink); background: #fff4d6; border-radius: 8px; padding: 6px 10px; }
+.mp-warn { padding: 4px 2px; }
+.mp-warn b { font-size: 17px; color: var(--stop); }
+.mp-warn p { font-size: 15px; margin: 6px 0 12px; }
+.mp-warn .btn { width: 100%; margin-bottom: 8px; }
